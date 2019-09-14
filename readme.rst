@@ -14,7 +14,7 @@ about never doing that again. That's what ``st`` provides.
 simple enough that someone who doesn't want to understand the intricacies of SSH
 tunneling could use it.
 
-It is written in Python 3, and relies on the command line tool library `click`_,
+It is written in Python 3, and relies on the command line tool library click_,
 but just running ``pip install supertunnel`` should get you the ``st`` command.
 
 

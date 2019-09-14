@@ -1,10 +1,12 @@
-import os
-import sys
 import curses
 import datetime as dt
+import os
+import sys
+
 import click
 
 __all__ = ["terminfo", "StatusMessage", "echo_subprocess_error"]
+
 
 def format_timedelta(td):
     """Format a time-delta into hours/minutes/seconds"""
@@ -12,6 +14,7 @@ def format_timedelta(td):
     mn = (td.seconds // 60) - (hr * 60)
     s = td.seconds % 60
     return "{:d}:{:02d}:{:02d}".format(hr, mn, s)
+
 
 class _Terminfo:
     """
@@ -122,7 +125,7 @@ def echo_subprocess_error(error, stderr=True):
     Echo a subprocess error and the output from that subprocess.
     """
     error_message = "[{}]".format(click.style("ERROR", fg="red"))
-    click.echo("{} Collecting ports for forwarding: {:s}".format(error_message, str(e)), err=stderr)
+    click.echo("{} Collecting ports for forwarding: {:s}".format(error_message, str(error)), err=stderr)
     for line in error.stdout.decode("utf-8", "backslashreplace").splitlines():
         click.echo("{} STDOUT: {}".format(error_message, line), err=stderr)
     for line in error.stderr.decode("utf-8", "backslashreplace").splitlines():

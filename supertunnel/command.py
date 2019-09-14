@@ -1,10 +1,12 @@
-import click
 import functools
 import logging
-from typing import NamedTuple, Optional, Iterable
-from .ssh import SSHConfiguration, ContinuousSSH
-from .port import clean_ports, ForwardingPortArgument
+from typing import Iterable, NamedTuple, Optional
+
+import click
+
 from .log import setup_logging
+from .port import ForwardingPortArgument, clean_ports
+from .ssh import ContinuousSSH, SSHConfiguration
 
 host_argument = functools.partial(click.argument, "host_args", nargs=-1)
 
@@ -22,12 +24,12 @@ host_argument = functools.partial(click.argument, "host_args", nargs=-1)
 )
 @SSHConfiguration.host_check.option(
     "--connect-accept-new",
-    flag_value='accept-new',
+    flag_value="accept-new",
     help="Allow connections to hosts which aren't in the known hosts file (see StrictHostKeyChecking).",
 )
 @SSHConfiguration.host_check.option(
     "--no-connect-accept-new",
-    flag_value='yes',
+    flag_value="yes",
     help="Allow connections to hosts which aren't in the known hosts file (see StrictHostKeyChecking).",
 )
 @SSHConfiguration.verbose.option("--ssh-verbose/--no-ssh-verbose", default=True, hidden=True)
@@ -46,21 +48,11 @@ def main(ctx, verbose):
 
 
 @main.command()
-@click.option(
-    "-p",
-    "--port",
-    "ports",
-    default=[],
-    type=ForwardingPortArgument(),
-    multiple=True,
-    help="Port to forward from the remote machine to the local machine. To forward to a different port, pass the ports as `local,remote`.",
-)
-@click.option(
-    "-R/-L", "--remote/--local", default=False, help="Use remote forwarding (defaults to using local forwarding / -L)"
-)
+@SSHConfiguration.forward_local.option("-p", "-L", "--local-port", help="Local ports to forward to the remote machine")
+@SSHConfiguration.forward_remote.option("-R", "--remote-port", help="Remote ports to forward to the local machine")
 @host_argument()
 @click.pass_context
-def forward(ctx, host_args, ports, remote):
+def forward(ctx, host_args):
     """Run an SSH tunnel over specified ports to HOST.
     
     Using the ssh option 'ServerAliveInterval', this script will keep the SSH tunnel alive
@@ -83,16 +75,11 @@ def forward(ctx, host_args, ports, remote):
     cfg: SSHConfiguration = ctx.ensure_object(SSHConfiguration)
     cfg.set_host(host_args)
 
-    forward_arg = "-R" if remote else "-L"
-    forward_template = "{0:d}:localhost:{1:d}"
-
     click.echo("Forwarding ports:")
-    for i, (local_port, remote_port) in enumerate(clean_ports(ports), start=1):
-        cfg.extend([forward_arg, forward_template.format(local_port, remote_port)])
-        if remote:
-            click.echo("{}) {} -> {}".format(i, remote_port, local_port))
-        else:
-            click.echo("{}) {} -> {}".format(i, local_port, remote_port))
+    for i, port in enumerate(set(cfg.forward_local), start=1):
+        click.echo("{}) local:{} -> remote:{}".format(i, port.source, port.destination))
+    for i, port in enumerate(set(cfg.forward_remote), start=1):
+        click.echo("{}) remote:{} -> local:{}".format(i, port.destination, port.source))
 
     proc = ContinuousSSH(cfg, click.get_text_stream("stdout"))
     click.echo("^C to exit")

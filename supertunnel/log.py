@@ -2,14 +2,15 @@ import logging
 import logging.handlers
 import os
 
-class PIDFilter(logging.Filter):
 
+class PIDFilter(logging.Filter):
     def __init__(self, pid):
         self.pid = pid
 
     def filter(self, record):
         record.pid = self.pid
         return True
+
 
 def setup_logging(verbose):
     """Set up the loggers"""

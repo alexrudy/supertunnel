@@ -1,20 +1,22 @@
-import logging
-import subprocess
-import shlex
-import json
 import functools
+import json
+import logging
+import shlex
+import subprocess
 from pathlib import PosixPath
 
 import click
 
-from .port import ForwardingPort
+from .command import forward, main
 from .messaging import echo_subprocess_error
-from .command import main, forward
+from .port import ForwardingPort
+from .ssh import SSHConfiguration
+
+log = logging.getLogger(__name__)
 
 
 def iter_json_data(output):
     """Iterate through decoded JSON information ports"""
-    log = logging.getLogger("jt.auto")
 
     for line in output.splitlines():
         if line.strip("\r\n").strip():
@@ -30,20 +32,20 @@ def iter_json_data(output):
                 yield data
 
 
-def get_relevant_ports(host_args, restrict_to_user=True, show_urls=True):
+def get_relevant_ports(cfg, restrict_to_user=True, show_urls=True):
     """Get relevant port numbers for jupyter notebook services
     
     This is all a long-con to figure out how to run ``jupyter list --json``
     on the remote host. Its not easy, and kind of a big pile of shell hacks,
     but it mostly works for now.
     """
-    log = logging.getLogger("jt.auto")
+    log = logging.getLogger(__name__).getChild("auto")
 
     pgrep_string = "python3?.* .*jupyter"
     pgrep_args = ["pgrep", "-f", shlex.quote(pgrep_string), "|", "xargs", "ps", "-o", "command=", "-p"]
     if restrict_to_user:
         pgrep_args.insert(1, "-u$(id -u)")
-    ssh_pgrep_args = ["ssh", *host_args, " ".join(pgrep_args)]
+    ssh_pgrep_args = cfg.arguments() + [" ".join(pgrep_args)]
     ports = set()
     log.debug("ssh pgrep args = {!r}".format(pgrep_args))
     cmd = subprocess.run(ssh_pgrep_args, capture_output=True)
@@ -71,7 +73,7 @@ def get_relevant_ports(host_args, restrict_to_user=True, show_urls=True):
         else:
             raise ValueError("Can't find jupyter notebook in process {}".format(proc))
         cmd = python, jupyter, "list", "--json"
-        ssh_juptyer_args = ["ssh", *host_args, " ".join(shlex.quote(cpart) for cpart in cmd)]
+        ssh_juptyer_args = cfg.arguments() + [" ".join(shlex.quote(cpart) for cpart in cmd)]
         log.debug("ssh jupyter args = {!r}".format(ssh_juptyer_args))
         cmd = subprocess.run(ssh_juptyer_args, capture_output=True)
         cmd.check_returncode()
@@ -95,14 +97,18 @@ opt_restrict_user = functools.partial(
 @main.command()
 @opt_restrict_user("--restrict-user/--no-restrict-user")
 @click.argument("host_args", nargs=-1)
-def discover(host_args, restrict_user):
+@click.pass_context
+def discover(ctx, host_args, restrict_user):
     """
     Discover ports that jupyter/jupyter-lab is using on the remote machine.
     
     """
+    cfg: SSHConfiguration = ctx.ensure_object(SSHConfiguration)
+    cfg.set_host(host_args)
+
     ports = []
     try:
-        ports = get_relevant_ports(host_args, restrict_user)
+        ports = get_relevant_ports(cfg, restrict_user)
     except subprocess.CalledProcessError as e:
         echo_subprocess_error(e)
 
@@ -122,10 +128,13 @@ def jupyter(ctx, host_args, auto, auto_restrict_user):
     """
     Tunnel on ports in use by jupyter
     """
+    cfg: SSHConfiguration = ctx.ensure_object(SSHConfiguration)
+    cfg.set_host(host_args)
+
     if auto:
         ports = []
         try:
-            ports = get_relevant_ports(host_args, auto_restrict_user)
+            ports = get_relevant_ports(cfg, auto_restrict_user)
         except subprocess.CalledProcessError as e:
             echo_subprocess_error(e)
 

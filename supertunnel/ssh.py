@@ -1,18 +1,22 @@
-import logging
-from .log import PIDFilter
-from .messaging import StatusMessage
-import datetime as dt
-import time
-import subprocess
-from collections.abc import Mapping
-from weakref import WeakKeyDictionary
-from typing import Optional, Dict, List, Any, Type
-import selectors
 import contextlib
+import datetime as dt
+import logging
+import selectors
+import subprocess
+import time
+from collections.abc import Mapping
+from typing import Any, Dict, List, Optional, Type
+from weakref import WeakKeyDictionary
 
 import click
 
+from .log import PIDFilter
+from .messaging import StatusMessage
+from .port import ForwardingPort, ForwardingPortArgument
+
 __all__ = ["ContinousSSH", "SSHConfiguration"]
+
+log = logging.getLogger(__name__)
 
 
 class SSHTypeError(Exception):
@@ -25,11 +29,12 @@ class SSHTypeError(Exception):
 
 
 class SSHDescriptorBase:
-    def __init__(self, name: Optional[str] = None, type=str, default=None):
+    def __init__(self, name: Optional[str] = None, type=str, default=None, multi=False):
         super().__init__()
         self.name = name
         self.type = type
         self.default = default
+        self.multi = multi
 
     def __set_name__(self, owner, name):
         if self.name is None:
@@ -40,6 +45,11 @@ class SSHDescriptorBase:
         return f"{self.__class__.__name__}({self.name}, type={self.type})"
 
     def value(self, obj):
+        if self.multi:
+            values = obj._ssh_options.setdefault(self.name, [])
+            if not values and self.default is not None:
+                values.append(self.default)
+            return values
         return obj._ssh_options.get(self.name, self.default)
 
     def __get__(self, obj, owner):
@@ -48,13 +58,15 @@ class SSHDescriptorBase:
         return self.value(obj)
 
     def __set__(self, obj, value):
-        obj._ssh_options[self.name] = self.type(value)
+        if self.multi:
+            obj._ssh_options.values.setdefault(self.name, []).append(value)
+        else:
+            obj._ssh_options[self.name] = self.type(value)
 
     def option(self, *args, **kwargs):
         kwargs["callback"] = self.callback
         kwargs.setdefault("expose_value", False)
-        # kwargs.setdefault('type', self.type)
-        # print(f"{self!r}.option(*{args!r} **{kwargs!r})")
+        kwargs.setdefault("multiple", self.multi)
         return click.option(*args, **kwargs)
 
     def callback(self, ctx, param, value):
@@ -62,8 +74,13 @@ class SSHDescriptorBase:
             return
 
         cfg = ctx.ensure_object(SSHConfiguration)
+
         try:
-            self.__set__(cfg, value)
+            if self.multi:
+                for v in value:
+                    self.__set__(cfg, v)
+            else:
+                self.__set__(cfg, value)
         except (TypeError, ValueError) as e:
             raise click.BadParameter(f"{value!r}")
 
@@ -88,7 +105,7 @@ class SSHOption(SSHDescriptorBase):
             value = "{:s}".format(value)
         else:
             raise SSHTypeError(self.type, value)
-        
+
         ssh_args.append(f"{self.name} {value}")
         return ssh_args
 
@@ -110,6 +127,38 @@ class SSHFlag(SSHDescriptorBase):
         if value:
             return [self.flag]
         return []
+
+
+class SSHPortForwarding(SSHDescriptorBase):
+    def __init__(self, mode="local", default=None):
+        super().__init__(name=None, type=ForwardingPort.parse, default=default, multi=True)
+        self.mode = mode
+
+    def arguments(self, owner):
+        values = self.value(owner)
+
+        if not values:
+            return []
+
+        args = []
+        forward_arg = {"local": "-L", "remote": "-R"}[self.mode]
+
+        seen = set()
+        for fport in values:
+            if not fport or fport in seen:
+                continue
+
+            args.extend([forward_arg, str(fport)])
+            seen.add(fport)
+
+        return args
+
+    def option(self, *args, **kwargs):
+        kwargs.setdefault("type", ForwardingPortArgument())
+        return super().option(*args, **kwargs)
+
+
+_sentinel = object()
 
 
 class SSHOptions(Mapping):
@@ -137,6 +186,14 @@ class SSHOptions(Mapping):
     def __iter__(self):
         return iter(self.values)
 
+    def setdefault(self, value, default):
+        return self.values.setdefault(value, default)
+
+    def get(self, key, default=_sentinel):
+        if default is _sentinel:
+            return self.values[key]
+        return self.values.get(key, default)
+
     @classmethod
     def options(cls, owner):
         if not isinstance(owner, type):
@@ -153,6 +210,9 @@ class SSHConfiguration:
     host_check = SSHOption("StrictHostKeyChecking", str)
     batch_mode = SSHOption("BatchMode", bool, default=True)
     exit_on_forward_failure = SSHOption("ExitOnForwardFailure", bool, default=None)
+
+    forward_local = SSHPortForwarding(mode="local")
+    forward_remote = SSHPortForwarding(mode="remote")
 
     host: List[str]
     args: List[str]
@@ -227,7 +287,7 @@ class ContinuousSSH:
         self._messenger = StatusMessage(stream, click.style("disconnected", fg="red"))
 
         self.sshlog = logging.getLogger("ssh")
-        self.logger = logging.getLogger("st.ssh")
+        self.logger = logging.getLogger(__name__)
         self._sshhandler = self.sshlog.handlers[0]
 
         self._popen_settings = {"bufsize": 0}
@@ -246,7 +306,7 @@ class ContinuousSSH:
                     self._last_proc = time.monotonic()
                     self._run_once()
 
-                    duration = (time.monotonic() - self._last_proc)
+                    duration = time.monotonic() - self._last_proc
                     if duration < self._backoff_time:
                         waittime = self._backoff_time - (time.monotonic() - self._last_proc)
                         self.logger.debug("Waiting %.1fs for backoff (duration=%.1fs)", waittime, duration)
@@ -283,7 +343,7 @@ class ContinuousSSH:
         proc = subprocess.Popen(
             self.config.arguments(), stderr=subprocess.STDOUT, stdout=subprocess.PIPE, **self._popen_settings
         )
-        
+
         pid_filter = PIDFilter(proc.pid)
         sshlog = self.sshlog.getChild(str(proc.pid))
         sshlog.addFilter(pid_filter)
@@ -293,7 +353,7 @@ class ContinuousSSH:
         log.info("Launching proc = {}".format(proc.pid))
         log.debug("Config = %r", self.config)
         log.debug("Command = %s", " ".join(self.config.arguments()))
-        
+
         try:
             log.debug("Connecting proc = {}".format(proc.pid))
             self._messenger.status("connecting", fg="yellow")

@@ -1,13 +1,52 @@
+from dataclasses import dataclass
+from typing import Iterable, NamedTuple, Optional
+
 import click
-from typing import NamedTuple, Optional, Iterable
 
 
-class ForwardingPort(NamedTuple):
+@dataclass(frozen=True)
+class ForwardingPort:
     source: int
     destination: int
+    sourcehost: Optional[str] = None
+    destinationhost: str = "localhost"
 
     def __str__(self):
-        return f"({self.source:d}:{self.destination:d})"
+        if self.sourcehost:
+            sh = f"{self.sourcehost:s}:"
+        else:
+            sh = ""
+
+        return f"{sh}{self.source:d}:{self.destinationhost}:{self.destination:d}"
+
+    @classmethod
+    def parse(cls, value):
+        if isinstance(value, int):
+            return ForwardingPort(source=value, destination=value)
+        elif isinstance(value, tuple):
+            return ForwardingPort(*value)
+
+        # Ensure that we can properly split pair values
+        if "," in value:
+            s, d = value.split(",", 1)
+            return ForwardingPort(int(s.strip()), int(d.strip()))
+
+        if ":" in value:
+            parts = value.split(":", 4)
+            if len(parts) == 4:
+                return ForwardingPort(
+                    sourcehost=parts[0], source=int(parts[1]), destinationhost=parts[2], destination=int(parts[3])
+                )
+            elif len(parts) == 3:
+                return ForwardingPort(source=int(parts[0]), destinationhost=parts[1], destination=int(parts[2]))
+            elif len(parts) == 2:
+                return ForwardingPort(source=int(parts[0]), destination=int(parts[1]))
+            else:
+                raise ValueError(value)
+
+        # Fallback to assuming we only got one value.
+        s = d = int(value.strip())
+        return ForwardingPort(s, d)
 
 
 class ForwardingPortArgument(click.ParamType):
@@ -31,20 +70,8 @@ class ForwardingPortArgument(click.ParamType):
             return
 
         # Ensure that we pass through values which are already correct.
-        if isinstance(value, int):
-            return ForwardingPort(source=value, destination=value)
-        elif isinstance(value, tuple):
-            return ForwardingPort(*value)
-
         try:
-            # Ensure that we can properly split pair values
-            if "," in value:
-                s, d = value.split(",", 1)
-                return ForwardingPort(int(s.strip()), int(d.strip()))
-
-            # Fallback to assuming we only got one value.
-            s = d = int(value.strip())
-            return ForwardingPort(s, d)
+            return ForwardingPort.parse(value)
         except ValueError:
             self.fail(f"Can't parse {value} as a forwarding port or pair of ports.", param, ctx)
 
@@ -64,7 +91,7 @@ def clean_ports(ports: Iterable[ForwardingPort]) -> Iterable[ForwardingPort]:
 
     for port in ports:
 
-        local, remote = port
+        local, remote = port.source, port.destination
         # We only check for duplicate local ports here. You might forward multiple local ports
         # to the same remote port, and I'm not here to tell you that is silly.
 

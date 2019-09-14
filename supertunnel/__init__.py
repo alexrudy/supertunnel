@@ -1,2 +1,2 @@
-from .command import main
 from . import jupyter
+from .command import main

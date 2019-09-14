@@ -18,5 +18,5 @@ It is written in Python 3, and relies on the command line tool library click_,
 but just running ``pip install supertunnel`` should get you the ``st`` command.
 
 
-.. click_: https://click.palletsprojects.com/
+.. _click: https://click.palletsprojects.com/
 

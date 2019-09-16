@@ -2,6 +2,7 @@ import curses
 import datetime as dt
 import os
 import sys
+import io
 
 import click
 
@@ -25,7 +26,11 @@ class _Terminfo:
     """
 
     def __init__(self):
-        self.__tty = os.isatty(sys.stdout.fileno())
+        try:
+            self.__tty = sys.stdout.isatty()
+        except io.UnsupportedOperation as e:
+            self.__tty = False
+
         if self.__tty:
             curses.setupterm()
         self.__ti = {}

@@ -4,7 +4,13 @@ import logging
 import shlex
 import subprocess
 from pathlib import PosixPath
+from typing import Any
+from typing import Dict
 from typing import Iterable
+from typing import Iterator
+from typing import NamedTuple
+from typing import Optional
+from typing import Set
 
 import click
 
@@ -20,7 +26,7 @@ log = logging.getLogger(__name__)
 
 def iter_json_data(output):
     """Iterate through decoded JSON information ports"""
-
+    log = logging.getLogger(__name__).getChild("auto")
     for line in output.splitlines():
         if line.strip("\r\n").strip():
             log.debug("JSON payload = {0!r}".format(line))
@@ -32,12 +38,20 @@ def iter_json_data(output):
             else:
                 log.debug("parsed port = {0}".format(data["port"]))
                 log.debug("jupyter url = {!r}".format(data["full_url"]))
-                yield data
+                yield JupyterInfo(data)
 
 
 def iter_processes(cfg: SSHConfiguration, pattern: str, restrict_to_user: bool = True) -> Iterable[str]:
     """
     Iterate over processes on the remote host which match the query string.
+
+    Parameters
+    ----------
+    cfg: SSHConfiguration
+        How to make an SSH connection to the remote host via a subprocess.
+    pattern: str
+        The grep pattern to use to find processes on the remote host using `pgrep`
+
     """
     log = logging.getLogger(__name__).getChild("auto")
     cfg = cfg.copy()
@@ -45,7 +59,8 @@ def iter_processes(cfg: SSHConfiguration, pattern: str, restrict_to_user: bool =
     # Ensure that we are correctly configured for a single command.
     cfg.batch_mode = True
     cfg.no_remote_command = False
-    
+    cfg.verbose = False
+
     cfg.args = []
 
     pgrep_args = ["pgrep", "-f", shlex.quote(pattern), "|", "xargs", "ps", "-o", "command=", "-p"]
@@ -63,8 +78,76 @@ def iter_processes(cfg: SSHConfiguration, pattern: str, restrict_to_user: bool =
     return procs.splitlines()
 
 
+class JupyterInfo(NamedTuple):
+    data: Dict[str, Any]
+
+    @property
+    def port(self):
+        return self.data["port"]
+
+    @property
+    def full_url(self):
+        return self.data["full_url"]
+
+    @property
+    def notebook_dir(self):
+        return self.data["notebook_dir"]
+
+
+class JupyterCommand(NamedTuple):
+    python: str
+    jupyter: str
+
+    def argument(self):
+        return " ".join(shlex.quote(cpart) for cpart in (*self, "list", "--json"))
+
+
+def iter_jupyter_ports(cfg: SSHConfiguration, cmd: JupyterCommand) -> Iterator[JupyterInfo]:
+    """
+    Find Jupyter ports
+    """
+    log = logging.getLogger(__name__).getChild("auto")
+
+    ssh_juptyer_args = cfg.arguments() + [cmd.argument()]
+    log.debug("ssh jupyter args = {!r}".format(ssh_juptyer_args))
+
+    cmd = subprocess.run(ssh_juptyer_args, capture_output=True)
+    cmd.check_returncode()
+
+    output = cmd.stdout.decode("utf-8", "backslashreplace")
+    seen: Set[int] = set()
+    for data in iter_json_data(output):
+        if data.port not in seen:
+            seen.add(data.port)
+            yield data
+
+
+def find_jupyter_command(proc: str) -> Optional[JupyterCommand]:
+    log = logging.getLogger(__name__).getChild("auto")
+    parts = shlex.split(proc)
+
+    if parts[0] in ("pgrep", "xargs"):
+        return None
+
+    python = parts[0]
+    log.debug("Python candidate = {!r}".format(parts))
+    for p in parts[1:]:
+        if p.endswith("jupyter-notebook"):
+            jupyter = p
+            break
+        if p.endswith("jupyter-lab"):
+            jupyter = str(PosixPath(p).parent / "jupyter-notebook")
+            break
+        if "ipykernel" in p:
+            break
+    else:
+        raise ValueError("Can't find jupyter notebook in process {}".format(proc))
+    return JupyterCommand(python, jupyter)
+
+
 def get_relevant_ports(cfg, restrict_to_user=True, show_urls=True):
-    """Get relevant port numbers for jupyter notebook services
+    """
+    Get relevant port numbers for jupyter notebook services
     
     This is all a long-con to figure out how to run ``jupyter list --json``
     on the remote host. Its not easy, and kind of a big pile of shell hacks,
@@ -79,40 +162,20 @@ def get_relevant_ports(cfg, restrict_to_user=True, show_urls=True):
     cfg.batch_mode = True
 
     pattern = "python3?.* .*jupyter"
-    
+
     ports = set()
     for proc in iter_processes(cfg, pattern, restrict_to_user=restrict_to_user):
-        parts = shlex.split(proc)
-        python = parts[0]
-        if "pgrep" in parts and pgrep_string in parts:
+        cmd = find_jupyter_command(proc)
+        if cmd is None:
             continue
-        if parts[0] == "xargs":
-            continue
-        log.debug("Python candidate = {!r}".format(parts))
-        for p in parts[1:]:
-            if p.endswith("jupyter-notebook"):
-                jupyter = p
-                break
-            if p.endswith("jupyter-lab"):
-                jupyter = str(PosixPath(p).parent / "jupyter-notebook")
-                break
-            if "ipykernel" in p:
-                break
-        else:
-            raise ValueError("Can't find jupyter notebook in process {}".format(proc))
-        cmd = python, jupyter, "list", "--json"
-        ssh_juptyer_args = cfg.arguments() + [" ".join(shlex.quote(cpart) for cpart in cmd)]
-        log.debug("ssh jupyter args = {!r}".format(ssh_juptyer_args))
-        cmd = subprocess.run(ssh_juptyer_args, capture_output=True)
-        cmd.check_returncode()
-        output = cmd.stdout.decode("utf-8", "backslashreplace")
-        for data in iter_json_data(output):
-            if data["port"] not in ports:
-                ports.add(data["port"])
-                if show_urls:
-                    click.echo("{:d}) {full_url:s} ({notebook_dir:s})".format(len(ports), **data))
+
+        for data in iter_jupyter_ports(cfg, cmd):
+            ports.add(ForwardingPort(data.port, data.port))
+            if show_urls:
+                click.echo("{:d}) {data.full_url:s} ({data.notebook_dir:s})".format(len(ports), data=data))
+
     log.info("Auto-discovered ports = {0!r}".format(ports))
-    return [ForwardingPort(port, port) for port in ports]
+    return list(ports)
 
 
 opt_restrict_user = functools.partial(

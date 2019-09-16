@@ -2,8 +2,8 @@ import contextlib
 import datetime as dt
 import logging
 import selectors
-import subprocess
 import shlex
+import subprocess
 import time
 from collections.abc import Mapping
 from typing import Any
@@ -331,7 +331,6 @@ class SSHConfiguration(SSHConfigBase):
         args = ["ssh"]
         for option in self._ssh_options.options(self):
             args.extend(option.arguments(self))
-
 
         # Host goes last to override previous options if necessary
         args.extend(self.host)

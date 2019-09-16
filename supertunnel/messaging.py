@@ -1,8 +1,8 @@
 import curses
 import datetime as dt
+import io
 import os
 import sys
-import io
 
 import click
 

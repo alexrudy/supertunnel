@@ -5,14 +5,26 @@ import selectors
 import subprocess
 import time
 from collections.abc import Mapping
-from typing import Any, Dict, List, Optional, Type
+from typing import Any
+from typing import Callable
+from typing import Dict
+from typing import Generic
+from typing import Iterable
+from typing import List
+from typing import Optional
+from typing import overload
+from typing import Set
+from typing import Type
+from typing import TypeVar
+from typing import Union
 from weakref import WeakKeyDictionary
 
 import click
 
 from .log import PIDFilter
 from .messaging import StatusMessage
-from .port import ForwardingPort, ForwardingPortArgument
+from .port import ForwardingPort
+from .port import ForwardingPortArgument
 
 __all__ = ["ContinousSSH", "SSHConfiguration"]
 
@@ -20,31 +32,36 @@ log = logging.getLogger(__name__)
 
 
 class SSHTypeError(Exception):
-    def __init__(self, type, value=None):
+    def __init__(self, type: Any, value: Optional[Any] = None) -> None:
         self.type = type
         self.value = value
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "Type {!r} is not supported by supertunnel.ssh (value = {!r})".format(self.type, self.value)
 
 
-class SSHDescriptorBase:
-    def __init__(self, name: Optional[str] = None, type=str, default=None, multi=False):
+T = TypeVar("T")
+
+
+class SSHDescriptorBase(Generic[T]):
+    def __init__(
+        self, name: Optional[str] = None, type: Any = str, default: Optional[T] = None, multi: bool = False
+    ) -> None:
         super().__init__()
         self.name = name
         self.type = type
         self.default = default
         self.multi = multi
 
-    def __set_name__(self, owner, name):
+    def __set_name__(self, owner: Type, name: str) -> None:
         if self.name is None:
             self.name = name
         SSHOptions.add(owner, self)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.name}, type={self.type})"
 
-    def value(self, obj):
+    def value(self, obj: Any) -> Optional[T]:
         if self.multi:
             values = obj._ssh_options.setdefault(self.name, [])
             if not values and self.default is not None:
@@ -52,14 +69,14 @@ class SSHDescriptorBase:
             return values
         return obj._ssh_options.get(self.name, self.default)
 
-    def __get__(self, obj, owner):
+    def __get__(self, obj: Optional[Any], owner: Type[Any]) -> Union[Optional[T], "SSHDescriptorBase"]:
         if obj is None:
             return self
         return self.value(obj)
 
-    def __set__(self, obj, value):
-        if self.multi:
-            obj._ssh_options.values.setdefault(self.name, []).append(value)
+    def __set__(self, obj: Any, value: Union[T, str]) -> None:
+        if value is None or self.multi:
+            obj._ssh_options[self.name] = value
         else:
             obj._ssh_options[self.name] = self.type(value)
 
@@ -69,7 +86,7 @@ class SSHDescriptorBase:
         kwargs.setdefault("multiple", self.multi)
         return click.option(*args, **kwargs)
 
-    def callback(self, ctx, param, value):
+    def callback(self, ctx: click.Context, param: str, value: Optional[str]) -> None:
         if value is None or ctx.resilient_parsing:
             return
 
@@ -77,8 +94,7 @@ class SSHDescriptorBase:
 
         try:
             if self.multi:
-                for v in value:
-                    self.__set__(cfg, v)
+                self.value(cfg).extend(value)
             else:
                 self.__set__(cfg, value)
         except (TypeError, ValueError) as e:
@@ -86,7 +102,7 @@ class SSHDescriptorBase:
 
 
 class SSHOption(SSHDescriptorBase):
-    def arguments(self, owner):
+    def arguments(self, owner: Any) -> List[str]:
         value = self.value(owner)
 
         # When the value isn't set, don't add any arguments
@@ -111,11 +127,11 @@ class SSHOption(SSHDescriptorBase):
 
 
 class SSHFlag(SSHDescriptorBase):
-    def __init__(self, flag, default=None):
+    def __init__(self, flag: str, default: Optional[bool] = None) -> None:
         super().__init__(name=None, type=bool, default=default)
         self.flag = flag
 
-    def arguments(self, owner):
+    def arguments(self, owner: Any) -> List[str]:
         value = self.value(owner)
 
         if value is None:
@@ -130,11 +146,11 @@ class SSHFlag(SSHDescriptorBase):
 
 
 class SSHPortForwarding(SSHDescriptorBase):
-    def __init__(self, mode="local", default=None):
+    def __init__(self, mode: str = "local", default: Optional[ForwardingPort] = None) -> None:
         super().__init__(name=None, type=ForwardingPort.parse, default=default, multi=True)
         self.mode = mode
 
-    def arguments(self, owner):
+    def arguments(self, owner: Any) -> List[str]:
         values = self.value(owner)
 
         if not values:
@@ -143,7 +159,7 @@ class SSHPortForwarding(SSHDescriptorBase):
         args = []
         forward_arg = {"local": "-L", "remote": "-R"}[self.mode]
 
-        seen = set()
+        seen: Set[ForwardingPort] = set()
         for fport in values:
             if not fport or fport in seen:
                 continue
@@ -162,46 +178,50 @@ _sentinel = object()
 
 
 class SSHOptions(Mapping):
-    _options: Dict[Type, List[SSHDescriptorBase]] = WeakKeyDictionary()
-    values: Dict[str, Any]
+    _options: Dict[Type, List[SSHDescriptorBase]] = WeakKeyDictionary()  # type: ignore
+    _values: Dict[str, Any]
 
-    def __init__(self):
-        self.values = {}
+    def __init__(self) -> None:
+        self._values = {}
 
     @classmethod
-    def add(cls, owner, option):
+    def add(cls, owner: Any, option: SSHDescriptorBase) -> None:
         options = cls.options(owner)
         if option not in options:
             options.append(option)
 
-    def __getitem__(self, key):
-        return self.values[key]
+    def __getitem__(self, key: str) -> Any:
+        return self._values[key]
 
-    def __setitem__(self, key, value):
-        self.values[key] = value
+    def __setitem__(self, key: str, value: Any):
+        self._values[key] = value
 
-    def __len__(self):
-        return len(self.values)
+    def __len__(self) -> int:
+        return len(self._values)
 
-    def __iter__(self):
-        return iter(self.values)
+    def __iter__(self) -> Iterable[str]:  # type: ignore
+        return iter(self._values)
 
-    def setdefault(self, value, default):
-        return self.values.setdefault(value, default)
+    def setdefault(self, key: str, default: Any) -> None:
+        return self._values.setdefault(key, default)
 
-    def get(self, key, default=_sentinel):
+    def get(self, key: str, default: Any = _sentinel) -> Optional[Any]:
         if default is _sentinel:
-            return self.values[key]
-        return self.values.get(key, default)
+            return self._values[key]
+        return self._values.get(key, default)
 
     @classmethod
-    def options(cls, owner):
+    def options(cls, owner: Any) -> List[SSHDescriptorBase]:
         if not isinstance(owner, type):
             owner = type(owner)
         return cls._options.setdefault(owner, [])
 
 
 class SSHConfiguration:
+    """
+    Configuration for arguments to the ssh command.
+    """
+
     no_remote_command = SSHFlag("-N")
     verbose = SSHFlag("-v", default=True)
 
@@ -228,7 +248,7 @@ class SSHConfiguration:
         host = " ".join(self.host)
         return f"{self.__class__.__name__}({options!r}, {args!r}, {host!r})"
 
-    def set_host(self, args):
+    def set_host(self, args: Union[str, Iterable[str]]) -> None:
         if isinstance(args, str):
             host_args = [args]
         elif args:
@@ -242,10 +262,13 @@ class SSHConfiguration:
 
         self.host = host_args
 
-    def extend(self, values):
+    def extend(self, values: Iterable[str]) -> None:
         self.args.extend(values)
 
-    def arguments(self):
+    def arguments(self) -> List[str]:
+        """
+        Construct the list of arguments to pass to ssh
+        """
         args = ["ssh"]
         for option in self._ssh_options.options(self):
             args.extend(option.arguments(self))

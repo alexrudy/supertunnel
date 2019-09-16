@@ -7,7 +7,9 @@ from pathlib import PosixPath
 
 import click
 
-from .command import forward, main
+from .command import forward
+from .command import main
+from .command import run
 from .messaging import echo_subprocess_error
 from .port import ForwardingPort
 from .ssh import SSHConfiguration
@@ -52,7 +54,7 @@ def get_relevant_ports(cfg, restrict_to_user=True, show_urls=True):
     cmd.check_returncode()
     procs = cmd.stdout.decode("utf-8", "backslashreplace")
     if show_urls:
-        click.echo("[{}] Locating jupyter notebooks...".format(click.style("INFO", fg="green")))
+        click.echo("Locating {} notebooks...".format(click.style("jupyter", fg="green")))
     for proc in procs.splitlines():
         parts = shlex.split(proc)
         python = parts[0]
@@ -66,7 +68,7 @@ def get_relevant_ports(cfg, restrict_to_user=True, show_urls=True):
                 jupyter = p
                 break
             if p.endswith("jupyter-lab"):
-                jupyter = str(PosixPath(p).parent / "jupyter")
+                jupyter = str(PosixPath(p).parent / "jupyter-notebook")
                 break
             if "ipykernel" in p:
                 break
@@ -116,10 +118,14 @@ def discover(ctx, host_args, restrict_user):
         click.echo("No jupyter open ports found.")
         raise click.Abort()
 
-    click.echo("Discovered ports {0}".format(", ".join("{:s}".format(p) for p in ports)))
+    cfg.forward_local = list(ports)
+
+    click.echo("Discovered ports {0}".format(", ".join("{!s}".format(p.destination) for p in ports)))
+    log.debug("Command = %s", json.dumps(cfg.arguments()))
 
 
 @main.command()
+@SSHConfiguration.forward_local.option("-p", "--port", help="Local ports to forward to the remote machine")
 @click.option("-a", "--auto/--no-auto", default=False, help="Auotmatically identify ports for forwarding")
 @opt_restrict_user("--auto-restrict-user/--no-auto-restrict-user")
 @click.argument("host_args", nargs=-1)
@@ -128,20 +134,12 @@ def jupyter(ctx, host_args, auto, auto_restrict_user):
     """
     Tunnel on ports in use by jupyter
     """
-    cfg: SSHConfiguration = ctx.ensure_object(SSHConfiguration)
-    cfg.set_host(host_args)
-
     if auto:
-        ports = []
-        try:
-            ports = get_relevant_ports(cfg, auto_restrict_user)
-        except subprocess.CalledProcessError as e:
-            echo_subprocess_error(e)
+        ctx.invoke(discover, host_args=host_args, restrict_user=auto_restrict_user)
 
-        if not ports:
-            click.echo("No jupyter open ports found.")
-            raise click.Abort()
+    cfg: SSHConfiguration = ctx.ensure_object(SSHConfiguration)
 
-        click.echo("Forwarding ports {0}".format(", ".join("{:d}".format(p) for p in ports)))
+    if not cfg.forward_local:
+        click.echo("[{}] No ports set to forward.".format(click.style("WARNING", fg="yellow")))
 
-    ctx.invoke(forward, host_args=host_args, ports=ports, remote=False)
+    ctx.invoke(run, host_args=host_args)

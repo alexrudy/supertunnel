@@ -1,0 +1,6 @@
+tox
+pytest
+pytest-cov
+black
+reorder-python-imports
+mypy

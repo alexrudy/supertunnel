@@ -1,5 +1,9 @@
 from dataclasses import dataclass
-from typing import Iterable, NamedTuple, Optional
+from typing import Dict
+from typing import Iterable
+from typing import NamedTuple
+from typing import Optional
+from typing import Union
 
 import click
 
@@ -11,7 +15,7 @@ class ForwardingPort:
     sourcehost: Optional[str] = None
     destinationhost: str = "localhost"
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.sourcehost:
             sh = f"{self.sourcehost:s}:"
         else:
@@ -20,33 +24,37 @@ class ForwardingPort:
         return f"{sh}{self.source:d}:{self.destinationhost}:{self.destination:d}"
 
     @classmethod
-    def parse(cls, value):
+    def parse(cls, value: Union[str, int, tuple]) -> "ForwardingPort":
         if isinstance(value, int):
-            return ForwardingPort(source=value, destination=value)
+            return cls(source=value, destination=value)
         elif isinstance(value, tuple):
-            return ForwardingPort(*value)
+            src, dst = value
+            return cls(src, dst)
+        elif isinstance(value, cls):
+            return value
 
         # Ensure that we can properly split pair values
         if "," in value:
             s, d = value.split(",", 1)
-            return ForwardingPort(int(s.strip()), int(d.strip()))
+            return cls(int(s.strip()), int(d.strip()))
 
         if ":" in value:
-            parts = value.split(":", 4)
+            parts = value.split(":", 3)
             if len(parts) == 4:
-                return ForwardingPort(
+                return cls(
                     sourcehost=parts[0], source=int(parts[1]), destinationhost=parts[2], destination=int(parts[3])
                 )
             elif len(parts) == 3:
-                return ForwardingPort(source=int(parts[0]), destinationhost=parts[1], destination=int(parts[2]))
+                return cls(source=int(parts[0]), destinationhost=parts[1], destination=int(parts[2]))
             elif len(parts) == 2:
-                return ForwardingPort(source=int(parts[0]), destination=int(parts[1]))
-            else:
+                return cls(source=int(parts[0]), destination=int(parts[1]))
+            else:  # pragma: no cover
+                # This should be unreachable.
                 raise ValueError(value)
 
         # Fallback to assuming we only got one value.
-        s = d = int(value.strip())
-        return ForwardingPort(s, d)
+        s_port = d_port = int(value.strip())
+        return cls(s_port, d_port)
 
 
 class ForwardingPortArgument(click.ParamType):
@@ -60,24 +68,26 @@ class ForwardingPortArgument(click.ParamType):
     name = "port"
 
     def convert(
-        self, value: Optional[str], param: Optional[str], ctx: Optional[click.Context]
+        self, value: Optional[str], param: Optional[click.Parameter], ctx: Optional[click.Context]
     ) -> Optional[ForwardingPort]:
         """Called to create this type when parsing on the command line"""
 
         # Skip parsing when the parameter isn't really present (e.g.
         # when click is responding to a completion request)
         if not value or getattr(ctx, "resilient_parsing", False):
-            return
+            return None
 
         # Ensure that we pass through values which are already correct.
         try:
-            return ForwardingPort.parse(value)
+            port = ForwardingPort.parse(value)
         except ValueError:
             self.fail(f"Can't parse {value} as a forwarding port or pair of ports.", param, ctx)
 
+        return port
+
 
 class DuplicateLocalPort(Exception):
-    def __init__(self, requested, current):
+    def __init__(self, requested: int, current: int):
         self.requested = requested
         self.current = current
 
@@ -87,7 +97,7 @@ class DuplicateLocalPort(Exception):
 
 def clean_ports(ports: Iterable[ForwardingPort]) -> Iterable[ForwardingPort]:
     """Take the ports, and yield appropriate pairs."""
-    port_map = dict()
+    port_map: Dict[int, int] = dict()
 
     for port in ports:
 
@@ -97,7 +107,7 @@ def clean_ports(ports: Iterable[ForwardingPort]) -> Iterable[ForwardingPort]:
 
         # Check if ports are already in use for a different forwarding pair.
         if port_map.get(local, remote) != remote:
-            raise DuplicateLocalPort(local, local_ports[local])
+            raise DuplicateLocalPort(local, port_map[local])
 
         # Skip if we are already forwarding this pair of ports.
         if local in port_map:

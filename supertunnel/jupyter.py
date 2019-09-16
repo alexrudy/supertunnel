@@ -4,6 +4,7 @@ import logging
 import shlex
 import subprocess
 from pathlib import PosixPath
+from typing import Iterable
 
 import click
 
@@ -34,6 +35,34 @@ def iter_json_data(output):
                 yield data
 
 
+def iter_processes(cfg: SSHConfiguration, pattern: str, restrict_to_user: bool = True) -> Iterable[str]:
+    """
+    Iterate over processes on the remote host which match the query string.
+    """
+    log = logging.getLogger(__name__).getChild("auto")
+    cfg = cfg.copy()
+
+    # Ensure that we are correctly configured for a single command.
+    cfg.batch_mode = True
+    cfg.no_remote_command = False
+    
+    cfg.args = []
+
+    pgrep_args = ["pgrep", "-f", shlex.quote(pattern), "|", "xargs", "ps", "-o", "command=", "-p"]
+    if restrict_to_user:
+        pgrep_args.insert(1, "-u$(id -u)")
+
+    cfg.args = [" ".join(pgrep_args)]
+
+    log.debug("ssh pgrep args = {!r}".format(cfg.arguments()))
+
+    cmd = subprocess.run(cfg.arguments(), capture_output=True)
+    cmd.check_returncode()
+
+    procs = cmd.stdout.decode("utf-8", "backslashreplace")
+    return procs.splitlines()
+
+
 def get_relevant_ports(cfg, restrict_to_user=True, show_urls=True):
     """Get relevant port numbers for jupyter notebook services
     
@@ -43,19 +72,16 @@ def get_relevant_ports(cfg, restrict_to_user=True, show_urls=True):
     """
     log = logging.getLogger(__name__).getChild("auto")
 
-    pgrep_string = "python3?.* .*jupyter"
-    pgrep_args = ["pgrep", "-f", shlex.quote(pgrep_string), "|", "xargs", "ps", "-o", "command=", "-p"]
-    if restrict_to_user:
-        pgrep_args.insert(1, "-u$(id -u)")
-    ssh_pgrep_args = cfg.arguments() + [" ".join(pgrep_args)]
-    ports = set()
-    log.debug("ssh pgrep args = {!r}".format(pgrep_args))
-    cmd = subprocess.run(ssh_pgrep_args, capture_output=True)
-    cmd.check_returncode()
-    procs = cmd.stdout.decode("utf-8", "backslashreplace")
     if show_urls:
         click.echo("Locating {} notebooks...".format(click.style("jupyter", fg="green")))
-    for proc in procs.splitlines():
+
+    cfg = cfg.copy()
+    cfg.batch_mode = True
+
+    pattern = "python3?.* .*jupyter"
+    
+    ports = set()
+    for proc in iter_processes(cfg, pattern, restrict_to_user=restrict_to_user):
         parts = shlex.split(proc)
         python = parts[0]
         if "pgrep" in parts and pgrep_string in parts:

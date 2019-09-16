@@ -8,16 +8,16 @@ from .ssh import SSHOption
 def test_configuration():
     cfg = SSHConfiguration()
 
+    assert cfg.arguments() == ["ssh"]
+    assert cfg.verbose == None
+    assert cfg.batch_mode == None
+
+    cfg.verbose = True
+    cfg.batch_mode = True
+
     assert cfg.arguments() == ["ssh", "-v", "-o", "BatchMode yes"]
     assert cfg.batch_mode == True
     assert cfg.verbose == True
-
-    cfg.verbose = False
-    cfg.batch_mode = None
-
-    assert cfg.arguments() == ["ssh"]
-    assert cfg.verbose == False
-    assert cfg.batch_mode == None
 
 
 def test_timeout():

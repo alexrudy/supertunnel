@@ -3,6 +3,7 @@ import datetime as dt
 import logging
 import selectors
 import subprocess
+import shlex
 import time
 from collections.abc import Mapping
 from typing import Any
@@ -224,8 +225,8 @@ class SSHOptions(Mapping):
     _options: Dict[Type, List[SSHDescriptorBase]] = WeakKeyDictionary()  # type: ignore
     _values: Dict[str, Any]
 
-    def __init__(self) -> None:
-        self._values = {}
+    def __init__(self, values: Optional[Dict[str, Any]] = None) -> None:
+        self._values = dict(values or {})
 
     @classmethod
     def add(cls, owner: Any, option: SSHDescriptorBase) -> None:
@@ -253,6 +254,9 @@ class SSHOptions(Mapping):
             return self._values[key]
         return self._values.get(key, default)
 
+    def update(self, options: Dict[str, Any]) -> None:
+        return self._values.update(options)
+
     @classmethod
     def options(cls, owner: Any) -> List[SSHDescriptorBase]:
         if not isinstance(owner, type):
@@ -266,30 +270,42 @@ class SSHConfiguration(SSHConfigBase):
     """
 
     no_remote_command = SSHFlag("-N")
-    verbose = SSHFlag("-v", default=True)
+    verbose = SSHFlag("-v")
 
     interval = SSHOption("ServerAliveInterval", int)
     connect_timeout = timeout = SSHOption("ConnectTimeout", int)
     host_check = SSHOption("StrictHostKeyChecking", str)
-    batch_mode = SSHOption("BatchMode", bool, default=True)
-    exit_on_forward_failure = SSHOption("ExitOnForwardFailure", bool, default=None)
+    batch_mode = SSHOption("BatchMode", bool)
+    exit_on_forward_failure = SSHOption("ExitOnForwardFailure", bool)
 
     forward_local = SSHPortForwarding(mode="local")
     forward_remote = SSHPortForwarding(mode="remote")
 
     host: List[str]
     args: List[str]
+    cmd: List[str]
 
-    def __init__(self):
+    def __init__(
+        self,
+        host: Optional[List[str]] = None,
+        args: Optional[List[str]] = None,
+        options: Optional[Dict[str, Any]] = None,
+    ):
         super().__init__()
-        self.host = []
-        self.args = []
+        if options:
+            self._ssh_options.update(options)
+        self.host = host or []
+        self.args = args or []
 
     def __repr__(self):
-        options = self._ssh_options.values
+        options = self._ssh_options._values
         args = " ".join(self.args)
         host = " ".join(self.host)
         return f"{self.__class__.__name__}({options!r}, {args!r}, {host!r})"
+
+    def copy(self) -> "SSHConfiguration":
+        cfg = self.__class__(options=self._ssh_options._values, host=self.host, args=self.args)
+        return cfg
 
     def set_host(self, args: Union[str, Iterable[str]]) -> None:
         if isinstance(args, str):
@@ -308,7 +324,7 @@ class SSHConfiguration(SSHConfigBase):
     def extend(self, values: Iterable[str]) -> None:
         self.args.extend(values)
 
-    def arguments(self) -> List[str]:
+    def arguments(self, include_cmd_args: bool = True) -> List[str]:
         """
         Construct the list of arguments to pass to ssh
         """
@@ -316,10 +332,11 @@ class SSHConfiguration(SSHConfigBase):
         for option in self._ssh_options.options(self):
             args.extend(option.arguments(self))
 
-        args.extend(self.args)
 
         # Host goes last to override previous options if necessary
         args.extend(self.host)
+        if include_cmd_args:
+            args.extend(self.args)
         return args
 
 

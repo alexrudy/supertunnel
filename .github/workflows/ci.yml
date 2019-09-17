@@ -33,6 +33,7 @@ jobs:
         ./scripts/sort-imports.py --check .
         ./scripts/format.py --check .
     - name: Typechecking with MyPy
+      run: |
         ./scripts/typecheck.py .
     - name: Test with pytest
       run: |

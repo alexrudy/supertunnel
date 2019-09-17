@@ -1,2 +1,2 @@
-from . import jupyter
-from .command import main
+from . import jupyter  # noqa
+from .command import main  # noqa

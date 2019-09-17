@@ -1,23 +1,20 @@
-import pytest
-
 from .port import ForwardingPort
 from .ssh import SSHConfiguration
-from .ssh import SSHOption
 
 
 def test_configuration():
     cfg = SSHConfiguration()
 
     assert cfg.arguments() == ["ssh"]
-    assert cfg.verbose == None
-    assert cfg.batch_mode == None
+    assert cfg.verbose is None
+    assert cfg.batch_mode is None
 
     cfg.verbose = True
     cfg.batch_mode = True
 
     assert cfg.arguments() == ["ssh", "-v", "-o", "BatchMode yes"]
-    assert cfg.batch_mode == True
-    assert cfg.verbose == True
+    assert cfg.batch_mode is True
+    assert cfg.verbose is True
 
 
 def test_timeout():

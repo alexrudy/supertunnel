@@ -1,12 +1,4 @@
-import json
-
-import click
-import pytest
-from click.testing import CliRunner
-from click.testing import Result
-
 from . import command
-from .ssh import SSHConfiguration
 
 
 def test_base_group(invoke):

@@ -1,13 +1,10 @@
 import contextlib
-import datetime as dt
 import logging
 import selectors
-import shlex
 import subprocess
 import time
 from collections.abc import Mapping
 from typing import Any
-from typing import Callable
 from typing import Dict
 from typing import Generic
 from typing import IO
@@ -28,7 +25,7 @@ from .messaging import StatusMessage
 from .port import ForwardingPort
 from .port import ForwardingPortArgument
 
-__all__ = ["ContinousSSH", "SSHConfiguration"]
+__all__ = ["ContinuousSSH", "SSHConfiguration"]
 
 log = logging.getLogger(__name__)
 
@@ -101,7 +98,7 @@ class SSHDescriptorBase(Generic[T]):
 
         try:
             self.__set__(cfg, value)
-        except (TypeError, ValueError) as e:
+        except (TypeError, ValueError):
             raise click.BadParameter(f"{value!r}")
 
 
@@ -137,7 +134,7 @@ class SSHMultiDescriptor(SSHDescriptorBase):
         try:
 
             self.values(cfg).extend(self.type(v) for v in values)
-        except (TypeError, ValueError) as e:
+        except (TypeError, ValueError):
             raise click.BadParameter(f"{values!r}")
 
     def option(self, *args, **kwargs):

@@ -1,15 +1,9 @@
 import enum
 import functools
-import logging
-from typing import Iterable
-from typing import NamedTuple
-from typing import Optional
 
 import click
 
 from .log import setup_logging
-from .port import clean_ports
-from .port import ForwardingPortArgument
 from .ssh import ContinuousSSH
 from .ssh import SSHConfiguration
 
@@ -54,7 +48,6 @@ def main(ctx, verbose):
     This script logs SSH connections in the folder ~/.st/
     """
     setup_logging(verbose)
-    log = logging.getLogger("jt")
 
 
 @main.command()

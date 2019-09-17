@@ -138,8 +138,6 @@ def find_jupyter_command(proc: str) -> Optional[JupyterCommand]:
         if p.endswith("jupyter-lab"):
             jupyter = str(PosixPath(p).parent / "jupyter-notebook")
             break
-        if "ipykernel" in p:
-            break
     else:
         raise ValueError("Can't find jupyter notebook in process {}".format(proc))
     return JupyterCommand(python, jupyter)
@@ -169,6 +167,9 @@ def get_relevant_ports(cfg, restrict_to_user=True, show_urls=True):
         if cmd is None:
             continue
 
+        # TODO: Make JupyterInfo hashable, then simplify this so that
+        # list printing can happen at the end once we've gathered all possible ports,
+        # simplifying this list.
         for data in iter_jupyter_ports(cfg, cmd):
             ports.add(ForwardingPort(data.port, data.port))
             if show_urls:

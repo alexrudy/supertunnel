@@ -31,6 +31,8 @@ def invoke_ssh_args(command, args):
     result = runner.invoke(command, args + ["_show_for_testing"], catch_exceptions=False)
 
     assert_click_result(result)
+    print(result.output)
+
     args = json.loads(result.output.splitlines()[-1])
     return (result, args)
 

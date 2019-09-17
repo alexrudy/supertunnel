@@ -15,7 +15,12 @@ __gitroot__ = Path(__file__).parent.parent
 @click.argument("path", type=Path, nargs=-1)
 def main(exclude_pytest: bool, path: Tuple[Path]) -> None:
     """Run mypy on a list of files"""
-    pyfiles = [p for d in path for p in d.glob("**/*.py") if not (is_pytest_path(p) and exclude_pytest)]
+    pyfiles = [
+        p
+        for d in path
+        for p in d.glob("**/*.py")
+        if (not (is_pytest_path(p) and exclude_pytest)) and (not exclude_path(p))
+    ]
 
     if not pyfiles:
         raise click.BadParameter("No paths found for PATH {!r}".format(path))
@@ -42,6 +47,15 @@ def is_pytest_path(path: Path) -> bool:
     if path.name.startswith("test_"):
         return True
     if path.name == "conftest.py":
+        return True
+    return False
+
+
+def exclude_path(path: Path) -> bool:
+    """Checks if this is a directory we should skip"""
+    if ".tox" in path.parts:
+        return True
+    if path.name == "setup.py":
         return True
     return False
 

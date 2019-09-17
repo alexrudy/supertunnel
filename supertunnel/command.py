@@ -21,7 +21,7 @@ class CommandResult(enum.Enum):
     RUN = enum.auto()
 
 
-@click.group(chain=True)
+@click.group()
 @SSHConfiguration.interval.option(
     "-k",
     "--interval",
@@ -66,6 +66,10 @@ def run(ctx, host_args):
     cfg.set_host(host_args)
     cfg.no_remote_command = True
 
+    run_continuous(cfg)
+
+
+def run_continuous(cfg):
     proc = ContinuousSSH(cfg, click.get_text_stream("stdout"))
     click.echo("^C to exit")
     proc.run()
@@ -73,19 +77,11 @@ def run(ctx, host_args):
 
 
 @main.command()
-@host_argument()
-@click.pass_context
-def show(ctx, host_args):
-    cfg: SSHConfiguration = ctx.ensure_object(SSHConfiguration)
-    cfg.set_host(host_args)
-    click.echo(" ".join(cfg.arguments()))
-
-
-@main.command()
 @SSHConfiguration.forward_local.option("-p", "-L", "--local-port", help="Local ports to forward to the remote machine")
 @SSHConfiguration.forward_remote.option("-R", "--remote-port", help="Remote ports to forward to the local machine")
+@host_argument()
 @click.pass_context
-def forward(ctx):
+def forward(ctx, host_args):
     """Run an SSH tunnel over specified ports to HOST.
     
     Using the ssh option 'ServerAliveInterval', this script will keep the SSH tunnel alive
@@ -112,3 +108,5 @@ def forward(ctx):
         click.echo("{}) local:{} -> remote:{}".format(i, port.source, port.destination))
     for i, port in enumerate(set(cfg.forward_remote), start=1):
         click.echo("{}) remote:{} -> local:{}".format(i, port.destination, port.source))
+
+    ctx.invoke(run, host_args=host_args)

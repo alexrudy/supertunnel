@@ -7,13 +7,13 @@ from typing import List
 import pytest
 
 from .command import main
-from .command_test import invoke_ssh_args
 from .jupyter import get_relevant_ports
 from .port import ForwardingPort
 from .ssh import SSHConfiguration
 
 
-def mock_run(args: List[str], **config: Any) -> subprocess.CompletedProcess:
+def mock_run_ssh(args: List[str], **config: Any) -> subprocess.CompletedProcess:
+    assert args[0] == "ssh"
 
     stdout: List[str] = []
     returncode = 0
@@ -67,7 +67,7 @@ def config():
 
 @pytest.fixture
 def ssh(monkeypatch):
-    monkeypatch.setattr(subprocess, "run", mock_run)
+    monkeypatch.setattr(subprocess, "run", mock_run_ssh)
 
 
 def test_discovery(ssh, config):
@@ -108,3 +108,17 @@ def test_discovery_decoy_jupyter(ssh, config):
 def test_discovery_restrict_user(ssh, config):
     ports = get_relevant_ports(config, restrict_to_user=False)
     assert set(ports) == {ForwardingPort(47, 47), ForwardingPort(20, 20), ForwardingPort(42, 42)}
+
+
+def test_jupyter_command(ssh, invoke):
+    invoke(main, ["jupyter", "example.com"])
+
+
+def test_jupyter_auto_command(ssh, invoke):
+    _, args = invoke(main, ["jupyter", "--auto", "example.com"])
+    assert "47:localhost:47" in args
+
+
+def test_jupyter_error_command(ssh, invoke):
+
+    result, _ = invoke(main, ["jupyter", "--auto", "error.example.com"], is_error=True)

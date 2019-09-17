@@ -14,9 +14,7 @@ from typing import Set
 
 import click
 
-from .command import forward
-from .command import main
-from .command import run
+from . import command
 from .messaging import echo_subprocess_error
 from .port import ForwardingPort
 from .ssh import SSHConfiguration
@@ -186,7 +184,7 @@ opt_restrict_user = functools.partial(
 )
 
 
-@main.command()
+@command.main.command()
 @opt_restrict_user("--restrict-user/--no-restrict-user")
 @click.argument("host_args", nargs=-1)
 @click.pass_context
@@ -214,7 +212,7 @@ def discover(ctx, host_args, restrict_user):
     log.debug("Command = %s", json.dumps(cfg.arguments()))
 
 
-@main.command()
+@command.main.command()
 @SSHConfiguration.forward_local.option("-p", "--port", help="Local ports to forward to the remote machine")
 @click.option("-a", "--auto/--no-auto", default=False, help="Auotmatically identify ports for forwarding")
 @opt_restrict_user("--auto-restrict-user/--no-auto-restrict-user")
@@ -232,4 +230,4 @@ def jupyter(ctx, host_args, auto, auto_restrict_user):
     if not cfg.forward_local:
         click.echo("[{}] No ports set to forward.".format(click.style("WARNING", fg="yellow")))
 
-    ctx.invoke(run, host_args=host_args)
+    ctx.invoke(command.run, host_args=host_args)

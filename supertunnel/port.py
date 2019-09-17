@@ -8,25 +8,33 @@ from typing import Union
 import click
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class ForwardingPort:
-    source: int
-    destination: int
+    sourceport: int
+    destinationport: int
     sourcehost: Optional[str] = None
     destinationhost: str = "localhost"
 
-    def __str__(self) -> str:
+    @property
+    def source(self) -> str:
         if self.sourcehost:
-            sh = f"{self.sourcehost:s}:"
-        else:
-            sh = ""
+            return f"{self.sourcehost}:{self.sourceport:d}"
+        return f"{self.sourceport:d}"
 
-        return f"{sh}{self.source:d}:{self.destinationhost}:{self.destination:d}"
+    @property
+    def destination(self) -> str:
+        return f"{self.destinationhost}:{self.destinationport:d}"
+
+    def __repr__(self) -> str:
+        return f"ForwardingPort(soruce={self.source}, destination={self.destination})"
+
+    def __str__(self) -> str:
+        return f"{self.source}:{self.destination}"
 
     @classmethod
     def parse(cls, value: Union[str, int, tuple]) -> "ForwardingPort":
         if isinstance(value, int):
-            return cls(source=value, destination=value)
+            return cls(sourceport=value, destinationport=value)
         elif isinstance(value, tuple):
             src, dst = value
             return cls(src, dst)
@@ -42,12 +50,15 @@ class ForwardingPort:
             parts = value.split(":", 3)
             if len(parts) == 4:
                 return cls(
-                    sourcehost=parts[0], source=int(parts[1]), destinationhost=parts[2], destination=int(parts[3])
+                    sourcehost=parts[0],
+                    sourceport=int(parts[1]),
+                    destinationhost=parts[2],
+                    destinationport=int(parts[3]),
                 )
             elif len(parts) == 3:
-                return cls(source=int(parts[0]), destinationhost=parts[1], destination=int(parts[2]))
+                return cls(sourceport=int(parts[0]), destinationhost=parts[1], destinationport=int(parts[2]))
             elif len(parts) == 2:
-                return cls(source=int(parts[0]), destination=int(parts[1]))
+                return cls(sourceport=int(parts[0]), destinationport=int(parts[1]))
             else:  # pragma: no cover
                 # This should be unreachable.
                 raise ValueError(value)
@@ -101,7 +112,7 @@ def clean_ports(ports: Iterable[ForwardingPort]) -> Iterable[ForwardingPort]:
 
     for port in ports:
 
-        local, remote = port.source, port.destination
+        local, remote = port.sourceport, port.destinationport
         # We only check for duplicate local ports here. You might forward multiple local ports
         # to the same remote port, and I'm not here to tell you that is silly.
 
@@ -114,4 +125,4 @@ def clean_ports(ports: Iterable[ForwardingPort]) -> Iterable[ForwardingPort]:
             continue
 
         port_map[local] = remote
-        yield ForwardingPort(local, remote)
+        yield port

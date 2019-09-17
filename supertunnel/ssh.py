@@ -312,6 +312,8 @@ class SSHConfiguration(SSHConfigBase):
             host_args = [args]
         elif args:
             host_args = list(args)
+        else:
+            host_args = []
 
         # Remove "ssh" and "--" from arguments, since they probably came from CLI parsing?
         while "ssh" in host_args:

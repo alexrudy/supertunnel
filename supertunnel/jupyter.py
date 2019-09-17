@@ -137,14 +137,15 @@ def find_jupyter_command(proc: str) -> Optional[JupyterCommand]:
             jupyter = str(PosixPath(p).parent / "jupyter-notebook")
             break
     else:
-        raise ValueError("Can't find jupyter notebook in process {}".format(proc))
+        log.debug("Can't find jupyter notebook in candidate = {}".format(proc))
+        return None
     return JupyterCommand(python, jupyter)
 
 
 def get_relevant_ports(cfg, restrict_to_user=True, show_urls=True):
     """
     Get relevant port numbers for jupyter notebook services
-    
+
     This is all a long-con to figure out how to run ``jupyter list --json``
     on the remote host. Its not easy, and kind of a big pile of shell hacks,
     but it mostly works for now.
@@ -180,7 +181,10 @@ def get_relevant_ports(cfg, restrict_to_user=True, show_urls=True):
 opt_restrict_user = functools.partial(
     click.option,
     default=True,
-    help="Restrict automatic decection to the user ID. (default=True) Turning this off will try to forward ports for all users on the remote host.",
+    help=(
+        "Restrict automatic decection to the user ID. (default=True) "
+        "Turning this off will try to forward ports for all users on the remote host."
+    ),
 )
 
 
@@ -191,7 +195,6 @@ opt_restrict_user = functools.partial(
 def discover(ctx, host_args, restrict_user):
     """
     Discover ports that jupyter/jupyter-lab is using on the remote machine.
-    
     """
     cfg: SSHConfiguration = ctx.ensure_object(SSHConfiguration)
     cfg.set_host(host_args)

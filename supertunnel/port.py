@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import Dict
 from typing import Iterable
-from typing import NamedTuple
 from typing import Optional
 from typing import Union
 
@@ -71,7 +70,7 @@ class ForwardingPort:
 class ForwardingPortArgument(click.ParamType):
     """
     Command line type for an integer or a pair of integers.
-    
+
     Helpful for parsing the command line arguments where you pass two
     ports as 1234,1235 and what you want is to forward 1234 to 1235.
     """

@@ -4,3 +4,4 @@ pytest-cov
 black
 reorder-python-imports
 mypy
+flake8

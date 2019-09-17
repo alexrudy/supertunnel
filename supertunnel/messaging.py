@@ -1,7 +1,6 @@
 import curses
 import datetime as dt
 import io
-import os
 import sys
 
 import click
@@ -28,11 +27,14 @@ class _Terminfo:
     def __init__(self):
         try:
             self.__tty = sys.stdout.isatty()
-        except io.UnsupportedOperation as e:
+        except io.UnsupportedOperation:
             self.__tty = False
 
         if self.__tty:
-            curses.setupterm()
+            try:
+                curses.setupterm()
+            except curses.error:
+                self.__tty = False
         self.__ti = {}
 
     def __ensure(self, cap):

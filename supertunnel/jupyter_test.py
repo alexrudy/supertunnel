@@ -26,7 +26,11 @@ def mock_run_ssh(args: List[str], **config: Any) -> subprocess.CompletedProcess:
         if "bad-jupyter" in args[-2].split("."):
             stdout.append("/bad/python /path/to/jupyter-notebook")
         if "not-jupyter" in args[-2].split("."):
-            stdout.append("/not/jupyter /path/to/jupyter/decoy")
+            stdout.append("/not/jupyter/python /path/to/jupyter/decoy")
+            stdout.append(
+                "/not/jupyter/python -m ipykernel_launcher"
+                " -f /home/user/.local/share/jupyter/runtime/kernel-uuid.json"
+            )
         stdout.append("/some/python /path/to/jupyter-lab")
         if "pgrep-self" in args[-2].split("."):
             stdout.insert(1, args[-1])
@@ -41,7 +45,6 @@ def mock_run_ssh(args: List[str], **config: Any) -> subprocess.CompletedProcess:
 
     if args[-1].startswith("/other/python"):
         stdout.append(json.dumps(dict(port=42, token="foobarbaz", notebook_dir="/notebooks/")))
-
     if args[-1].startswith("/bad/python"):
         stdout.append("not-really-json{)")
 
@@ -101,8 +104,8 @@ def test_discovery_error(ssh, config):
 
 def test_discovery_decoy_jupyter(ssh, config):
     config.set_host(["not-jupyter.example.com"])
-    with pytest.raises(ValueError):
-        get_relevant_ports(config)
+    ports = get_relevant_ports(config)
+    assert set(ports) == {ForwardingPort(47, 47), ForwardingPort(20, 20)}
 
 
 def test_discovery_restrict_user(ssh, config):

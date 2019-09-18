@@ -1,8 +1,25 @@
-``st``: The SuperTunnel
------------------------
+`st`: The SuperTunnel
+---------------------
 
-``st`` is a supercharged SSH tunnel manager, useful for managing SSH 
+`st` is a supercharged SSH tunnel manager, useful for managing SSH 
 connections that you want to be long lived.
+
+To forward port 8888 from ``host.example.com``::
+
+    $ st forward -p 8888 host.example.com
+    Forwarding ports:
+    1) local:8888 -> remote:8888
+    ^C to exit
+    [connected] 0:00:00 |
+
+The tunnel will be kept alive, both by ssh and by supertunnel. If you lose your
+network connection for a while, or if you suddenly get cut off, supertunnel works
+with ssh to notice the connection failure, and seamlessly restarts the tunneling process.
+
+That just scratches the surface of what supertunnel can do though.
+
+Why supertunnel?
+****************
 
 I wrote this script when I used to ride a train through a tunnel every day, and
 it would interrupt my connection to a Jupyter notebook on a remote server, but

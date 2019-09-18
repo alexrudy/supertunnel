@@ -46,6 +46,7 @@ class SuperTunnelConfig:
     default=False,
     help="Use this flag to print the ssh command without running it.",
 )
+@click.version_option()
 @click.pass_context
 def main(ctx, verbose, debug_command):
     """

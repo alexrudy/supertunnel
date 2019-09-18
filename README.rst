@@ -3,7 +3,7 @@
 
 |GithubActions|_ |PyPi|_
 
-.. |GithubActions| image:: https://github.com/alexrudy/supertunnel/workflows/Supertunnel\ CI/badge.svg
+.. |GithubActions| image:: https://github.com/alexrudy/supertunnel/workflows/Supertunnel%20CI/badge.svg
 .. _GithubActions: https://github.com/alexrudy/supertunnel/actions
 
 .. |PyPi| image:: https://badge.fury.io/py/supertunnel.svg

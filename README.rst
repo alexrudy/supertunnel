@@ -1,6 +1,14 @@
 `st`: The SuperTunnel
 ---------------------
 
+|GithubActions|_ |PyPi|_
+
+.. |GithubActions| image:: https://github.com/alexrudy/supertunnel/workflows/Supertunnel%20CI/badge.svg
+.. _GithubActions: https://github.com/alexrudy/supertunnel/actions
+
+.. |PyPi| image:: https://badge.fury.io/py/supertunnel.svg
+.. _PyPi: https://badge.fury.io/py/supertunnel
+
 `st` is a supercharged SSH tunnel manager, useful for managing SSH 
 connections that you want to be long lived.
 

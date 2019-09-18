@@ -1,5 +1,5 @@
-import enum
 import functools
+from dataclasses import dataclass
 
 import click
 
@@ -7,12 +7,12 @@ from .log import setup_logging
 from .ssh import ContinuousSSH
 from .ssh import SSHConfiguration
 
-host_argument = functools.partial(click.argument, "host_args", nargs=-1)
+host_argument = functools.partial(click.argument, "host_args", nargs=-1, metavar="HOST")
 
 
-class CommandResult(enum.Enum):
-    CONFIGURE = enum.auto()
-    RUN = enum.auto()
+@dataclass
+class SuperTunnelConfig:
+    debug_command: bool = False
 
 
 @click.group()
@@ -39,18 +39,33 @@ class CommandResult(enum.Enum):
 @SSHConfiguration.verbose.option("--ssh-verbose/--no-ssh-verbose", default=True, hidden=True)
 @SSHConfiguration.batch_mode.option("--ssh-batch-mode/--no-ssh-batch-mode", default=True, hidden=True)
 @click.option("-v", "--verbose", help="Show log messages", count=True)
+@click.option(
+    "--debug-command",
+    is_flag=True,
+    hidden=True,
+    default=False,
+    help="Use this flag to print the ssh command without running it.",
+)
 @click.pass_context
-def main(ctx, verbose):
+def main(ctx, verbose, debug_command):
     """
     A script for maintaining a long-lived SSH connection, which should be re-started
     when connections drop.
 
+    To forward port 80 from a local machine to a remote host host.example.com, use the
+    forward subcommand:
+    
+    \b
+        st forward -p 80 host.example.com
+
     This script logs SSH connections in the folder ~/.st/
     """
     setup_logging(verbose)
+    stc = ctx.ensure_object(SuperTunnelConfig)
+    stc.debug_command = debug_command
 
 
-@main.command()
+@main.command(hidden=True)
 @host_argument()
 @click.pass_context
 def run(ctx, host_args):
@@ -58,8 +73,14 @@ def run(ctx, host_args):
     cfg: SSHConfiguration = ctx.ensure_object(SSHConfiguration)
     cfg.set_host(host_args)
     cfg.no_remote_command = True
+    cfg.batch_mode = True
 
-    run_continuous(cfg)
+    stc = ctx.find_object(SuperTunnelConfig)
+
+    if stc.debug_command:
+        click.echo(" ".join(cfg.arguments()))
+    else:
+        run_continuous(cfg)
 
 
 def run_continuous(cfg):
@@ -75,7 +96,10 @@ def run_continuous(cfg):
 @host_argument()
 @click.pass_context
 def forward(ctx, host_args):
-    """Run an SSH tunnel over specified ports to HOST.
+    """Run an SSH tunnel over specified ports.
+
+    Opens a secure-shell connection to HOST, and tunnels the specified ports between
+    the local and remote host. Supports both local and remote port forwarding.
     
     Using the ssh option 'ServerAliveInterval', this script will keep the SSH tunnel alive
     and spawn a new tunnel if the old one dies.
@@ -86,9 +110,9 @@ def forward(ctx, host_args):
         st -p 80 -p 495 myserver.com
     
     To stop the SSH tunnel, press ^C.
-        
+
     You can pass arbitrary arguments to SSH to influence the connection using a special
-    `--` to mark which arguments apply to ssh (as opposed to ``st``):
+    `--` to mark which arguments apply to ssh (as opposed to `st`):
     
     \b
         st -- -k /path/to/my/key myserver.com

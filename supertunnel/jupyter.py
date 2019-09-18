@@ -58,6 +58,8 @@ def iter_processes(cfg: SSHConfiguration, pattern: str, restrict_to_user: bool =
     cfg.batch_mode = True
     cfg.no_remote_command = False
     cfg.verbose = False
+    cfg.forward_local = []
+    cfg.forward_remote = []
 
     cfg.args = []
 
@@ -105,6 +107,14 @@ def iter_jupyter_ports(cfg: SSHConfiguration, cmd: JupyterCommand) -> Iterator[J
     Find Jupyter ports
     """
     log = logging.getLogger(__name__).getChild("auto")
+    cfg = cfg.copy()
+
+    # Ensure that we are correctly configured for a single command.
+    cfg.batch_mode = True
+    cfg.no_remote_command = False
+    cfg.verbose = False
+    cfg.forward_local = []
+    cfg.forward_remote = []
 
     ssh_juptyer_args = cfg.arguments() + [cmd.argument()]
     log.debug("ssh jupyter args = {!r}".format(ssh_juptyer_args))
@@ -179,16 +189,18 @@ def get_relevant_ports(cfg, restrict_to_user=True, show_urls=True):
 
 
 opt_restrict_user = functools.partial(
-    click.option,
-    default=True,
-    help=(
-        "Restrict automatic decection to the user ID. (default=True) "
-        "Turning this off will try to forward ports for all users on the remote host."
-    ),
+    click.option, default=True, help=("Restrict automatic decection to the remote host user ID. (default=True)")
 )
 
+OPT_RESTRICT_USER_EPILOG = """
+Disabling the user restriction on the host machine should be a last
+resort. Turning off `restrict-user` will try to detect ports for all
+users on the remote host, which means the automatic detection might
+try to invoke a python binary which is owned by another user.
+"""
 
-@command.main.command()
+
+@command.main.command(hidden=True, epilog=OPT_RESTRICT_USER_EPILOG)
 @opt_restrict_user("--restrict-user/--no-restrict-user")
 @click.argument("host_args", nargs=-1)
 @click.pass_context
@@ -215,15 +227,53 @@ def discover(ctx, host_args, restrict_user):
     log.debug("Command = %s", json.dumps(cfg.arguments()))
 
 
-@command.main.command()
-@SSHConfiguration.forward_local.option("-p", "--port", help="Local ports to forward to the remote machine")
+@command.main.command(epilog=OPT_RESTRICT_USER_EPILOG)
+@SSHConfiguration.forward_local.option(
+    "-p", "--port", default=[ForwardingPort(8888, 8888)], help="Local ports to forward to the remote machine"
+)
 @click.option("-a", "--auto/--no-auto", default=False, help="Auotmatically identify ports for forwarding")
 @opt_restrict_user("--auto-restrict-user/--no-auto-restrict-user")
 @click.argument("host_args", nargs=-1)
 @click.pass_context
 def jupyter(ctx, host_args, auto, auto_restrict_user):
     """
-    Tunnel on ports in use by jupyter
+    Tunnel on ports in use by jupyter.
+
+    Opens an SSH tunnel to HOST and forards ports appropriate
+    for connecting to jupyter. By default, forwards port 8888,
+    the standard jupyter port:
+    
+    \b
+        st jupyter host.example.com
+
+    To provide arguments to SSH other than the hostname, use
+    the sentinel argument `--`:
+    
+    \b
+        st jupyter -- -k /path/to/my/key.pem host.example.com
+
+    SuperTunnel can try to auto-discover which jupyter ports are in use
+    on the remote host with the `--auto` flag:
+    
+    \b
+        st jupyter --auto host.example.com
+    
+    This will cause SuperTunnel to execute a few commands on the remote host
+    before starting the jupyter port tunnel.
+    
+    You can forward different ports using the `-p` option:
+    
+    \b
+        st jupyter -p8888 host.example.com
+    
+    or redirect ports using a `src:dest` syntax, for example to forward
+    port 8080 on the loaclhost to port 8888 on the remote host:
+    
+    \b
+        st jupyter -p8080 host.exmaple.com
+
+    The tunnel will run continuously and automatically re-connect after a network
+    interruption until you disable it with ^C.
     """
     if auto:
         ctx.invoke(discover, host_args=host_args, restrict_user=auto_restrict_user)

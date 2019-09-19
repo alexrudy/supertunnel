@@ -21,18 +21,22 @@ def mock_run_ssh(args: List[str], **config: Any) -> subprocess.CompletedProcess:
     # We're running pgrep, lets make sure we get sensible results.
     if args[-1].startswith("pgrep"):
 
+        hostname = args[-2].split(".")
+
         if "-u$(id -u)" not in args[-1]:
             stdout.append("/other/python /path/to/jupyter-lab")
-        if "bad-jupyter" in args[-2].split("."):
+        if "bad-jupyter" in hostname:
             stdout.append("/bad/python /path/to/jupyter-notebook")
-        if "not-jupyter" in args[-2].split("."):
+        if "not-jupyter" in hostname:
             stdout.append("/not/jupyter/python /path/to/jupyter/decoy")
             stdout.append(
                 "/not/jupyter/python -m ipykernel_launcher"
                 " -f /home/user/.local/share/jupyter/runtime/kernel-uuid.json"
             )
-        stdout.append("/some/python /path/to/jupyter-lab")
-        if "pgrep-self" in args[-2].split("."):
+        if "no-python" not in hostname:
+            stdout.append("/some/python /path/to/jupyter-lab")
+
+        if "pgrep-self" in hostname:
             stdout.insert(1, args[-1])
 
     if args[-1].startswith("/some/python"):
@@ -100,6 +104,11 @@ def test_discovery_error(ssh, config):
     config.set_host(["error.example.com"])
     with pytest.raises(subprocess.CalledProcessError):
         get_relevant_ports(config)
+
+
+def test_discovery_no_python(ssh, config):
+    config.set_host(["no-python.example.com"])
+    assert get_relevant_ports(config) == []
 
 
 def test_discovery_decoy_jupyter(ssh, config):

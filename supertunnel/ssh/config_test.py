@@ -51,8 +51,48 @@ def test_portfowarding():
     assert "10:localhost:30" in cfg.arguments()
 
 
+def test_repr():
+    cfg = SSHConfiguration()
+
+    assert repr(cfg).startswith("SSHConfiguration")
+
+
 @pytest.mark.parametrize(
-    "value,expected", [(" HOST foo.example.com", ("host", "foo.example.com")), ("Batchmode = no", ("batchmode", "no"))]
+    "host",
+    [
+        "host.example.com",
+        ["host.example.com"],
+        ["ssh", "host.example.com"],
+        ["--", "ssh", "host.example.com"],
+        ["ssh", "--", "ssh", "host.example.com"],
+    ],
+)
+def test_cfg_host(host):
+    cfg = SSHConfiguration()
+
+    cfg.set_host(host)
+    assert cfg.host == ["host.example.com"]
+
+
+def test_cfg_extend():
+    cfg = SSHConfiguration()
+    cfg.set_host("host.example.com")
+    cfg.extend(["echo", "Hello World"])
+    assert cfg.arguments() == ["ssh", "host.example.com", "echo", "Hello World"]
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        (" HOST foo.example.com", ("host", "foo.example.com")),
+        ("Batchmode = no", ("batchmode", "no")),
+        ('QuotedKey = "Confrabulator "', ("quotedkey", "Confrabulator ")),
+    ],
 )
 def test_configparsing(value, expected):
     assert parse_ssh_config_line(value) == ConfigValue(*expected)
+
+
+@pytest.mark.parametrize("value", ["", "# foo bar", "   # baz comment", "   "])
+def test_configparsing_comments(value):
+    assert parse_ssh_config_line(value) is None

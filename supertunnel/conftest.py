@@ -1,17 +1,11 @@
 import json
 
-import click
 import pytest
 from click.testing import CliRunner
 from click.testing import Result
 
 from . import command
 from .ssh import ContinuousSSH
-
-
-def _show_for_testing(cfg):
-    """Dummy command writes the arguments to stdout"""
-    click.echo(json.dumps(cfg.arguments()))
 
 
 def click_result_msg(result: Result) -> str:

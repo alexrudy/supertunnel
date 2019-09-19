@@ -139,6 +139,3 @@ def parse_config_file(file: IO[str]) -> Iterable[ConfigValue]:
         if cv:
             yield cv
 
-
-def ssh_configuration(values: Iterable[ConfigValue], host: str) -> Iterable[ConfigValue]:
-    pass

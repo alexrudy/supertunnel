@@ -1,7 +1,8 @@
 import functools
 from dataclasses import dataclass
-
+from typing import Optional
 import click
+import json
 
 from .log import setup_logging
 from .ssh import ContinuousSSH
@@ -12,7 +13,7 @@ host_argument = functools.partial(click.argument, "host_args", nargs=-1, metavar
 
 @dataclass
 class SuperTunnelConfig:
-    debug_command: bool = False
+    debug_format: Optional[str] = None
 
 
 @click.group()
@@ -41,14 +42,22 @@ class SuperTunnelConfig:
 @click.option("-v", "--verbose", help="Show log messages", count=True)
 @click.option(
     "--debug-command",
-    is_flag=True,
+    "debug_format",
+    flag_value="standard",
     hidden=True,
-    default=False,
+    default=None,
     help="Use this flag to print the ssh command without running it.",
+)
+@click.option(
+    "--debug-json",
+    "debug_format",
+    flag_value="json",
+    hidden=True,
+    help="Use this flag to serialize the ssh command to JSON without running it.",
 )
 @click.version_option()
 @click.pass_context
-def main(ctx, verbose, debug_command):
+def main(ctx, verbose, debug_format):
     """
     A script for maintaining a long-lived SSH connection, which should be re-started
     when connections drop.
@@ -63,7 +72,8 @@ def main(ctx, verbose, debug_command):
     """
     setup_logging(verbose)
     stc = ctx.ensure_object(SuperTunnelConfig)
-    stc.debug_command = debug_command
+    if debug_format:
+        stc.debug_format = debug_format
 
 
 @main.command(hidden=True)
@@ -78,17 +88,15 @@ def run(ctx, host_args):
 
     stc = ctx.find_object(SuperTunnelConfig)
 
-    if stc.debug_command:
+    if stc.debug_format == "standard":
         click.echo(" ".join(cfg.arguments()))
+    elif stc.debug_format == "json":
+        click.echo(json.dumps(cfg.arguments()))
     else:
-        run_continuous(cfg)
-
-
-def run_continuous(cfg):
-    proc = ContinuousSSH(cfg, click.get_text_stream("stdout"))
-    click.echo("^C to exit")
-    proc.run()
-    click.echo("Done")
+        proc = ContinuousSSH(cfg, click.get_text_stream("stdout"))
+        click.echo("^C to exit")
+        proc.run()
+        click.echo("Done")
 
 
 @main.command()

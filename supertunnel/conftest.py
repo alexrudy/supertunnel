@@ -6,6 +6,7 @@ from click.testing import CliRunner
 from click.testing import Result
 
 from . import command
+from .ssh import ContinuousSSH
 
 
 def _show_for_testing(cfg):
@@ -25,6 +26,7 @@ def assert_click_result(result: Result) -> None:
 
 def invoke_ssh_args(command, args, is_error=False):
     runner = CliRunner()
+    args.insert(0, "--debug-json")
     result = runner.invoke(command, args, catch_exceptions=False)
 
     if is_error:
@@ -40,5 +42,5 @@ def invoke_ssh_args(command, args, is_error=False):
 
 @pytest.fixture
 def invoke(monkeypatch):
-    monkeypatch.setattr(command, "run_continuous", _show_for_testing)
+    monkeypatch.delattr(ContinuousSSH, "run")
     return invoke_ssh_args

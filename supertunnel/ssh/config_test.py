@@ -1,5 +1,9 @@
-from .port import ForwardingPort
-from .ssh import SSHConfiguration
+import pytest
+
+from ..port import ForwardingPort
+from .config import ConfigValue
+from .config import parse_ssh_config_line
+from .config import SSHConfiguration
 
 
 def test_configuration():
@@ -45,3 +49,10 @@ def test_portfowarding():
     cfg.forward_local = [ForwardingPort(10, 30), ForwardingPort(20, 40)]
     assert cfg.forward_local == [ForwardingPort(10, 30), ForwardingPort(20, 40)]
     assert "10:localhost:30" in cfg.arguments()
+
+
+@pytest.mark.parametrize(
+    "value,expected", [(" HOST foo.example.com", ("host", "foo.example.com")), ("Batchmode = no", ("batchmode", "no"))]
+)
+def test_configparsing(value, expected):
+    assert parse_ssh_config_line(value) == ConfigValue(*expected)

@@ -157,7 +157,7 @@ class ContinuousSSH:
             # identify when connections are dying and kill them.
             for line in self._await_output(proc, timeout=self._subproc_stdout_timeout):
 
-                action = self._handle_ssh_line(line, sshlog, log)
+                action = self._handle_ssh_line(line, sshlog)
 
                 if action == Action.DISCONNECTED:
                     self._messenger.status("disconnected", fg="red")

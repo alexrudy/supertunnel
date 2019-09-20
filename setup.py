@@ -12,7 +12,7 @@ with open(path.join(here, "README.rst"), encoding="utf-8") as f:
 
 setup(
     name="supertunnel",
-    version="0.1rc2",
+    version="0.1rc3",
     author="Alex Rudy",
     author_email="alex.rudy@gmail.com",
     description="SuperTunnel makes for easy, long-lived SSH tunneling!",

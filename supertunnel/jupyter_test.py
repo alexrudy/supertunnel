@@ -4,10 +4,12 @@ import subprocess
 from typing import Any
 from typing import List
 
+import click
 import pytest
 
 from .command import main
 from .jupyter import get_relevant_ports
+from .jupyter import jupyter
 from .port import ForwardingPort
 from .ssh import SSHConfiguration
 
@@ -134,3 +136,13 @@ def test_jupyter_auto_command(ssh, invoke):
 def test_jupyter_error_command(ssh, invoke):
 
     result, _ = invoke(main, ["jupyter", "--auto", "error.example.com"], is_error=True)
+
+
+def test_jupyter_no_ports(ssh, invoke):
+    @main.command()
+    @click.pass_context
+    def test_jupyter_helper(ctx):
+        ctx.invoke(jupyter, host_args=["example.com"])
+
+    result, args = invoke(main, ["test-jupyter-helper"])
+    assert args == ["ssh", "-N", "-o", "BatchMode yes", "example.com"]

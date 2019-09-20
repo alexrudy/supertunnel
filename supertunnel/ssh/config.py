@@ -138,4 +138,3 @@ def parse_config_file(file: IO[str]) -> Iterable[ConfigValue]:
         cv = parse_ssh_config_line(line)
         if cv:
             yield cv
-

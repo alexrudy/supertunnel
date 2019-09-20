@@ -6,8 +6,10 @@ from pathlib import Path
 from typing import Tuple
 
 import click
+from helpers import expand_paths
+from helpers import gitroot
 
-__gitroot__ = Path(__file__).parent.parent
+__gitroot__ = gitroot()
 
 
 @click.command()
@@ -15,14 +17,9 @@ __gitroot__ = Path(__file__).parent.parent
 @click.argument("path", type=Path, nargs=-1)
 def main(exclude_pytest: bool, path: Tuple[Path]) -> None:
     """Run mypy on a list of files"""
-    pyfiles = [
-        p
-        for d in path
-        for p in d.glob("**/*.py")
-        if (not (is_pytest_path(p) and exclude_pytest)) and (not exclude_path(p))
-    ]
+    pyfiles = expand_paths(path)
 
-    if not pyfiles:
+    if not path:
         raise click.BadParameter("No paths found for PATH {!r}".format(path))
 
     mypy_config = __gitroot__ / "mypy.ini"
@@ -39,25 +36,6 @@ def main(exclude_pytest: bool, path: Tuple[Path]) -> None:
         result = subprocess.run(args)
 
     sys.exit(result.returncode)
-
-
-def is_pytest_path(path: Path) -> bool:
-    """Check if this is a pytest-specific python module, searching for the pytest
-    specific modules, test_ and conftest."""
-    if path.name.startswith("test_"):
-        return True
-    if path.name == "conftest.py":
-        return True
-    return False
-
-
-def exclude_path(path: Path) -> bool:
-    """Checks if this is a directory we should skip"""
-    if ".tox" in path.parts:
-        return True
-    if path.name == "setup.py":
-        return True
-    return False
 
 
 if __name__ == "__main__":

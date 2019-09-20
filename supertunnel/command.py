@@ -1,8 +1,9 @@
 import functools
+import json
 from dataclasses import dataclass
 from typing import Optional
+
 import click
-import json
 
 from .log import setup_logging
 from .ssh import ContinuousSSH

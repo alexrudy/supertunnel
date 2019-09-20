@@ -1,4 +1,5 @@
 import contextlib
+import enum
 import logging
 import selectors
 import subprocess
@@ -14,6 +15,12 @@ from .config import SSHConfiguration
 __all__ = ["ContinuousSSH"]
 
 log = logging.getLogger(__name__)
+
+
+class Action(enum.Enum):
+    CONTINUE = enum.auto()
+    CONNECTED = enum.auto()
+    DISCONNECTED = enum.auto()
 
 
 class ContinuousSSH:
@@ -55,27 +62,37 @@ class ContinuousSSH:
 
         self._subproc_stdout_timeout = 0.1
 
-        self._last_proc = None
+    def __repr__(self):
+        return f"ContinuousSSH({self.config!r})"
 
     def run(self):
         """Run the continuous process."""
         with self._messenger:
             try:
                 while True:
-                    self._last_proc = time.monotonic()
-                    self._run_once()
-
-                    duration = time.monotonic() - self._last_proc
-                    if duration < self._backoff_time:
-                        waittime = self._backoff_time - (time.monotonic() - self._last_proc)
-                        self.logger.debug("Waiting %.1fs for backoff (duration=%.1fs)", waittime, duration)
-                        time.sleep(waittime)
-                        self._backoff_time = min(2.0 * self._backoff_time, self._max_backoff_time)
-                    else:
-                        self._backoff_time = 0.1
-
+                    with self._backoff():
+                        self._run_once()
             except KeyboardInterrupt:
                 self._messenger.status("disconnected", fg="red")
+
+    @contextlib.contextmanager
+    def _backoff(self):
+        starttime = time.monotonic()
+
+        yield
+
+        # How long did this take?
+        duration = time.monotonic() - starttime
+
+        # If we took too long, sleep a little bit to catch up.
+        if duration < self._backoff_time:
+            waittime = self._backoff_time - duration
+            self.logger.debug("Waiting %.2fs for backoff (duration=%.2fs)", waittime, duration)
+            time.sleep(waittime)
+            self._backoff_time = min(2.0 * self._backoff_time, self._max_backoff_time)
+
+        else:
+            self._backoff_time = 0.1
 
     def timeout(self):
         """Handle timeout"""
@@ -96,6 +113,25 @@ class ContinuousSSH:
                 if not events:
                     self.timeout()
                 proc.poll()
+
+    def _handle_ssh_line(self, line: str, sshlog: logging.Logger) -> Action:
+        if line.startswith("debug1:"):
+            line = line[len("debug1:") :].strip()
+            sshlog.debug(line)
+        else:
+            sshlog.info(line)
+
+        action = Action.CONTINUE
+        self._messenger.message(line)
+
+        if "Entering interactive session" in line:
+            action = Action.CONNECTED
+
+        if "not responding" in line:
+            action = Action.DISCONNECTED
+
+        self._messenger.message(line)
+        return action
 
     def _run_once(self):
         """Run the SSH process once"""
@@ -120,22 +156,16 @@ class ContinuousSSH:
             # We drink from the SSH log firehose, so that we can
             # identify when connections are dying and kill them.
             for line in self._await_output(proc, timeout=self._subproc_stdout_timeout):
-                if line.startswith("debug1:"):
-                    line = line[len("debug1:") :].strip()
-                    sshlog.debug(line)
-                else:
-                    sshlog.info(line)
 
-                if "Entering interactive session" in line:
-                    self._messenger.status("connected", fg="green")
-                    log.debug("Connected proc = {}".format(proc.pid))
+                action = self._handle_ssh_line(line, sshlog, log)
 
-                if "not responding" in line:
+                if action == Action.DISCONNECTED:
                     self._messenger.status("disconnected", fg="red")
                     log.debug("Killing proc = {}".format(proc.pid))
                     proc.kill()
-
-                self._messenger.message(line)
+                if action == Action.CONNECTED:
+                    self._messenger.status("connected", fg="green")
+                    log.debug("Connected proc = %(pid)d")
 
             log.info("Waiting for process {} to end".format(proc.pid))
             proc.wait()

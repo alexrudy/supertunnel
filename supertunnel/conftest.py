@@ -1,11 +1,48 @@
+import io
 import json
 
 import pytest
 from click.testing import CliRunner
 from click.testing import Result
 
-from . import command
+from . import messaging
 from .ssh import ContinuousSSH
+
+
+class MockMessenger:
+    def __init__(self, stream, status=""):
+        self._active = False
+        self._messages = []
+        self._status = status
+        self._message = ""
+
+    def __enter__(self):
+        assert not self._active
+        self._active = True
+        return self
+
+    def __exit__(self, *args):
+        assert self._active
+        self._active = False
+
+    def status(self, msg, **kwargs):
+        self._status = msg
+        self._messages.append((self._status, self._message))
+
+    def message(self, msg, **kwargs):
+        self._message = msg
+        self._messages.append((self._status, self._message))
+
+
+@pytest.fixture
+def stream():
+    return io.StringIO()
+
+
+@pytest.fixture
+def messenger(monkeypatch, stream):
+    monkeypatch.setattr(messaging, "StatusMessage", MockMessenger)
+    return MockMessenger(stream=stream)
 
 
 def click_result_msg(result: Result) -> str:

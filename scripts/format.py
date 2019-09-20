@@ -5,6 +5,10 @@ from pathlib import Path
 from typing import Tuple
 
 import click
+from helpers import expand_paths
+from helpers import gitroot
+
+__gitroot__ = gitroot()
 
 
 @click.command()
@@ -16,7 +20,7 @@ def main(check: bool, path: Tuple[Path]) -> None:
     if check:
         arguments.append("--check")
 
-    pypaths = [str(p) for p in path]
+    pypaths = [str(p) for p in expand_paths(path)]
     if not pypaths:
         raise click.BadParameter("No paths found matching {paths!r}".format(paths=path))
 

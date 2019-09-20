@@ -215,7 +215,7 @@ def discover(ctx, host_args, restrict_user):
     try:
         ports = get_relevant_ports(cfg, restrict_user)
     except subprocess.CalledProcessError as e:
-        echo_subprocess_error(e)
+        echo_subprocess_error(e, message="Collecting ports for forwarding:")
 
     if not ports:
         click.echo("No jupyter open ports found.")
@@ -280,6 +280,8 @@ def jupyter(ctx, host_args, auto, auto_restrict_user):
 
     cfg: SSHConfiguration = ctx.ensure_object(SSHConfiguration)
 
+    # This probably can't get triggered, because we are defaulting to -p8080
+    # but leaving it in is useful in case we trigger it in the future.
     if not cfg.forward_local:
         click.echo("[{}] No ports set to forward.".format(click.style("WARNING", fg="yellow")))
 

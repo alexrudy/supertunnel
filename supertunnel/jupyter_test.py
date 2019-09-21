@@ -3,6 +3,7 @@ import logging
 import subprocess
 from typing import Any
 from typing import List
+import sys
 
 import click
 import pytest
@@ -13,9 +14,14 @@ from .jupyter import jupyter
 from .port import ForwardingPort
 from .ssh import SSHConfiguration
 
+PY37 = sys.version_info[0:1] >= (3, 7)
+
 
 def mock_run_ssh(args: List[str], **config: Any) -> subprocess.CompletedProcess:
     assert args[0] == "ssh"
+
+    if not PY37:
+        assert "capture_output" not in config, "python3.6 doesn't support capture_output"
 
     stdout: List[str] = []
     returncode = 0

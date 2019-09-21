@@ -71,7 +71,7 @@ def iter_processes(cfg: SSHConfiguration, pattern: str, restrict_to_user: bool =
 
     log.debug("ssh pgrep args = {!r}".format(cfg.arguments()))
 
-    cmd = subprocess.run(cfg.arguments(), capture_output=True)
+    cmd = subprocess.run(cfg.arguments(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     cmd.check_returncode()
 
     procs = cmd.stdout.decode("utf-8", "backslashreplace")
@@ -119,7 +119,7 @@ def iter_jupyter_ports(cfg: SSHConfiguration, cmd: JupyterCommand) -> Iterator[J
     ssh_juptyer_args = cfg.arguments() + [cmd.argument()]
     log.debug("ssh jupyter args = {!r}".format(ssh_juptyer_args))
 
-    cmd = subprocess.run(ssh_juptyer_args, capture_output=True)
+    cmd = subprocess.run(ssh_juptyer_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     cmd.check_returncode()
 
     output = cmd.stdout.decode("utf-8", "backslashreplace")

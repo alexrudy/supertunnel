@@ -52,7 +52,8 @@ def click_result_msg(result: Result) -> str:
 
 
 def assert_click_result(result: Result) -> None:
-    assert result.exit_code == 0, click_result_msg(result)
+    message = click_result_msg(result)
+    assert result.exit_code == 0, message
 
 
 def invoke_ssh_args(command, args, is_error=False):

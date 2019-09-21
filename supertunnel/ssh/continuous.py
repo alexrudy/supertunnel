@@ -73,6 +73,8 @@ class ContinuousSSH:
                     with self._backoff():
                         self._run_once()
             except KeyboardInterrupt:
+                pass
+            finally:
                 self._messenger.status("disconnected", fg="red")
 
     @contextlib.contextmanager
@@ -145,12 +147,12 @@ class ContinuousSSH:
         log = self.logger.getChild(str(proc.pid))
         log.addFilter(pid_filter)
 
-        log.info("Launching proc = {}".format(proc.pid))
+        log.info("Launching PID{}".format(proc.pid))
         log.debug("Config = %r", self.config)
         log.debug("Command = %s", " ".join(self.config.arguments()))
 
         try:
-            log.debug("Connecting proc = {}".format(proc.pid))
+            log.debug("Connecting PID{}".format(proc.pid))
             self._messenger.status("connecting", fg="yellow")
 
             # We drink from the SSH log firehose, so that we can
@@ -161,13 +163,13 @@ class ContinuousSSH:
 
                 if action == Action.DISCONNECTED:
                     self._messenger.status("disconnected", fg="red")
-                    log.debug("Killing proc = {}".format(proc.pid))
+                    log.debug("Killing PID{}".format(proc.pid))
                     proc.kill()
                 if action == Action.CONNECTED:
                     self._messenger.status("connected", fg="green")
-                    log.debug("Connected proc = %(pid)d")
+                    log.debug("Connected PID{}".format(proc.pid))
 
-            log.info("Waiting for process {} to end".format(proc.pid))
+            log.info("Waiting for process PID{} to end".format(proc.pid))
             proc.wait()
             self._messenger.status("disconnected", fg="red")
             self._sshhandler.doRollover()
@@ -175,4 +177,4 @@ class ContinuousSSH:
             if proc.returncode is None:
                 proc.terminate()
             self._messenger.status("disconnected", fg="red")
-            log.debug("Ended proc = {}".format(proc.pid))
+            log.debug("Process PID{} Ended".format(proc.pid))

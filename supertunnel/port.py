@@ -94,34 +94,3 @@ class ForwardingPortArgument(click.ParamType):
             self.fail(f"Can't parse {value} as a forwarding port or pair of ports.", param, ctx)
 
         return port
-
-
-class DuplicateLocalPort(Exception):
-    def __init__(self, requested: int, current: int):
-        self.requested = requested
-        self.current = current
-
-    def __str__(self):
-        return f"Local port {self.requested:d} is already set to be forwarding to {self.current:d}"
-
-
-def clean_ports(ports: Iterable[ForwardingPort]) -> Iterable[ForwardingPort]:
-    """Take the ports, and yield appropriate pairs."""
-    port_map: Dict[int, int] = dict()
-
-    for port in ports:
-
-        local, remote = port.sourceport, port.destinationport
-        # We only check for duplicate local ports here. You might forward multiple local ports
-        # to the same remote port, and I'm not here to tell you that is silly.
-
-        # Check if ports are already in use for a different forwarding pair.
-        if port_map.get(local, remote) != remote:
-            raise DuplicateLocalPort(local, port_map[local])
-
-        # Skip if we are already forwarding this pair of ports.
-        if local in port_map:
-            continue
-
-        port_map[local] = remote
-        yield port

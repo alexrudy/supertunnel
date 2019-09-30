@@ -1,7 +1,8 @@
 import functools
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
+import os
 
 import click
 
@@ -15,6 +16,7 @@ host_argument = functools.partial(click.argument, "host_args", nargs=-1, metavar
 @dataclass
 class SuperTunnelConfig:
     debug_format: Optional[str] = None
+    cfg: SSHConfiguration = field(default_factory=SSHConfiguration)
 
 
 @click.group()
@@ -82,12 +84,12 @@ def main(ctx, verbose, debug_format):
 @click.pass_context
 def run(ctx, host_args):
     """Run the configured SSH tunnel continuously"""
-    cfg: SSHConfiguration = ctx.ensure_object(SSHConfiguration)
+    stc = ctx.find_object(SuperTunnelConfig)
+
+    cfg: SSHConfiguration = stc.cfg
     cfg.set_host(host_args)
     cfg.no_remote_command = True
     cfg.batch_mode = True
-
-    stc = ctx.find_object(SuperTunnelConfig)
 
     if stc.debug_format == "standard":
         click.echo(" ".join(cfg.arguments()))
@@ -128,7 +130,7 @@ def forward(ctx, host_args):
         st -- -k /path/to/my/key myserver.com
     
     """
-    cfg: SSHConfiguration = ctx.ensure_object(SSHConfiguration)
+    cfg: SSHConfiguration = ctx.ensure_object(SuperTunnelConfig).cfg
 
     click.echo("Forwarding ports:")
     for i, port in enumerate(set(cfg.forward_local), start=1):

@@ -151,4 +151,6 @@ def test_jupyter_no_ports(ssh, invoke):
         ctx.invoke(jupyter, host_args=["example.com"])
 
     result, args = invoke(main, ["test-jupyter-helper"])
-    assert args == ["ssh", "-N", "-o", "BatchMode yes", "example.com"]
+    assert args[:3] == ["ssh", "-N", "-v"]
+    assert "BatchMode yes" in args
+    assert args[-1] == "example.com"

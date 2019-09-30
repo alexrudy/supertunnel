@@ -81,12 +81,12 @@ class SSHDescriptorBase(Generic[T]):
         return click.option(*args, **kwargs)
 
     def callback(self, ctx: click.Context, param: str, value: Optional[str]) -> None:
-        from .config import SSHConfiguration
+        from ..command import SuperTunnelConfig
 
         if value is None or ctx.resilient_parsing:
             return
 
-        cfg = ctx.ensure_object(SSHConfiguration)
+        cfg = ctx.ensure_object(SuperTunnelConfig).cfg
 
         try:
             self.__set__(cfg, value)
@@ -118,12 +118,12 @@ class SSHMultiDescriptor(SSHDescriptorBase):
         return values
 
     def callback(self, ctx: click.Context, param: str, values: Optional[Iterable[str]]) -> None:
-        from .config import SSHConfiguration
+        from ..command import SuperTunnelConfig
 
         if values is None or ctx.resilient_parsing:
             return
 
-        cfg = ctx.ensure_object(SSHConfiguration)
+        cfg = ctx.ensure_object(SuperTunnelConfig).cfg
 
         try:
 

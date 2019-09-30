@@ -208,7 +208,7 @@ def discover(ctx, host_args, restrict_user):
     """
     Discover ports that jupyter/jupyter-lab is using on the remote machine.
     """
-    cfg: SSHConfiguration = ctx.ensure_object(SSHConfiguration)
+    cfg: SSHConfiguration = ctx.ensure_object(command.SuperTunnelConfig).cfg
     cfg.set_host(host_args)
 
     ports = []
@@ -278,7 +278,7 @@ def jupyter(ctx, host_args, auto, auto_restrict_user):
     if auto:
         ctx.invoke(discover, host_args=host_args, restrict_user=auto_restrict_user)
 
-    cfg: SSHConfiguration = ctx.ensure_object(SSHConfiguration)
+    cfg: SSHConfiguration = ctx.ensure_object(command.SuperTunnelConfig).cfg
 
     # This probably can't get triggered, because we are defaulting to -p8080
     # but leaving it in is useful in case we trigger it in the future.

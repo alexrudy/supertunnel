@@ -119,7 +119,7 @@ def forward(ctx, host_args):
     To forward ports 80 and 495 from mysever.com to localhost, you would use:
     
     \b
-        st -p 80 -p 495 myserver.com
+        st forward -p 80 -p 495 myserver.com
     
     To stop the SSH tunnel, press ^C.
 
@@ -127,7 +127,7 @@ def forward(ctx, host_args):
     `--` to mark which arguments apply to ssh (as opposed to `st`):
     
     \b
-        st -- -k /path/to/my/key myserver.com
+        st forward -- -k /path/to/my/key myserver.com
     
     """
     cfg: SSHConfiguration = ctx.ensure_object(SuperTunnelConfig).cfg
